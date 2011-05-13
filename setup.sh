@@ -4,7 +4,9 @@
 set -e
 
 sudo apt-get -y install aptitude
-sudo aptitude -y install emacs git build-essential emacs-goodies-el emacs-goodies-extra-el compizconfig-settings-manager xsane ruby1.8 ruby1.8-dev wmctrl kdiff3 compiz-fusion-plugins-extra vlc vlc-plugin-pulse curl maven2
+sudo aptitude -y install emacs git build-essential emacs-goodies-el emacs-goodies-extra-el \
+ compizconfig-settings-manager xsane ruby1.8 ruby1.8-dev wmctrl kdiff3 compiz-fusion-plugins-extra \
+ vlc vlc-plugin-pulse curl maven2 chromium-browser
 
 # Get my emacs setup going
 mkdir -p ~/projects
