@@ -16,7 +16,6 @@ git clone https://github.com/candera/emacs.git ~/projects/emacs
 # Set up Leiningen
 mkdir -p ~/bin
 echo "export PATH=$PATH:~/bin" >> ~/.bashrc
-source ~/.bashrc
 curl -k -o ~/bin/lein https://github.com/technomancy/leiningen/raw/stable/bin/lein 
 chmod u+x ~/bin/lein
 lein self-install
@@ -25,3 +24,8 @@ lein self-install
 git config --global color.ui auto
 git config --global user.name "Craig Andera"
 git config --global user.email candera@wangdera.com
+
+# Set up cljr
+curl -o /tmp/cljr-installer.jar http://incanter.org/downloads/cljr-installer.jar
+java -jar /tmp/cljr-installer.jar
+echo "export PATH=$PATH:~/.cljr/bin" >> ~/.bashrc
