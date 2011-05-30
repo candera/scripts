@@ -3,29 +3,43 @@
 # Fail immediately if anything doesn't work
 set -e
 
-sudo apt-get -y install aptitude
-sudo aptitude -y install emacs git build-essential emacs-goodies-el emacs-goodies-extra-el \
- compizconfig-settings-manager xsane ruby1.8 ruby1.8-dev wmctrl kdiff3 compiz-fusion-plugins-extra \
- vlc vlc-plugin-pulse curl maven2 chromium-browser gnome-do
+function install_stuff {
+    sudo apt-get -y install aptitude
+    sudo aptitude -y install emacs git build-essential emacs-goodies-el emacs-goodies-extra-el \
+	compizconfig-settings-manager xsane ruby1.8 ruby1.8-dev wmctrl kdiff3 compiz-fusion-plugins-extra \
+	vlc vlc-plugin-pulse curl maven2 chromium-browser gnome-do
+}
 
-# Get my emacs setup going
-mkdir -p ~/projects
-git clone https://github.com/candera/emacs.git ~/projects/emacs
-~/projects/emacs/setup
+function setup_emacs {
+    mkdir -p ~/projects
+    if [ ! -d ~/projects/emacs ]; then
+	git clone https://github.com/candera/emacs.git ~/projects/emacs
+	~/projects/emacs/setup
+    fi
+}
 
-# Set up Leiningen
-mkdir -p ~/bin
-echo "export PATH=$PATH:~/bin" >> ~/.bashrc
-curl -k -o ~/bin/lein https://github.com/technomancy/leiningen/raw/stable/bin/lein 
-chmod u+x ~/bin/lein
-lein self-install
+function setup_lein {
+    mkdir -p ~/bin
+    echo "export PATH=$PATH:~/bin" >> ~/.bashrc
+    curl -k -o ~/bin/lein https://github.com/technomancy/leiningen/raw/stable/bin/lein 
+    chmod u+x ~/bin/lein
+    ~/bin/lein self-install
+}
 
-# Set up git
-git config --global color.ui auto
-git config --global user.name "Craig Andera"
-git config --global user.email candera@wangdera.com
+function setup_git {
+    git config --global color.ui auto
+    git config --global user.name "Craig Andera"
+    git config --global user.email candera@wangdera.com
+}
 
-# Set up cljr
-curl -o /tmp/cljr-installer.jar http://incanter.org/downloads/cljr-installer.jar
-java -jar /tmp/cljr-installer.jar
-echo "export PATH=$PATH:~/.cljr/bin" >> ~/.bashrc
+function setup_cljr {
+    curl -o /tmp/cljr-installer.jar http://incanter.org/downloads/cljr-installer.jar
+    java -jar /tmp/cljr-installer.jar
+    echo "export PATH=$PATH:~/.cljr/bin" >> ~/.bashrc
+}
+
+install_stuff
+setup_emacs
+setup_lein
+setup_git
+setup_cljr
