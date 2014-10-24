@@ -6,8 +6,7 @@ set -e
 function install_stuff {
     sudo apt-get -y install aptitude
     sudo aptitude -y install emacs git build-essential emacs-goodies-el emacs-goodies-extra-el \
-	compizconfig-settings-manager xsane ruby1.8 ruby1.8-dev wmctrl kdiff3 compiz-fusion-plugins-extra \
-	vlc vlc-plugin-pulse curl maven2 chromium-browser gnome-do
+	texinfo vlc vlc-plugin-pulse curl maven2 chromium-browser
 }
 
 function setup_emacs {
@@ -21,7 +20,7 @@ function setup_emacs {
 function setup_lein {
     mkdir -p ~/bin
     echo "export PATH=$PATH:~/bin" >> ~/.bashrc
-    curl -k -o ~/bin/lein https://github.com/technomancy/leiningen/raw/stable/bin/lein 
+    curl -k -o ~/bin/lein https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
     chmod u+x ~/bin/lein
     ~/bin/lein self-install
 }
@@ -32,14 +31,7 @@ function setup_git {
     git config --global user.email candera@wangdera.com
 }
 
-function setup_cljr {
-    curl -o /tmp/cljr-installer.jar http://incanter.org/downloads/cljr-installer.jar
-    java -jar /tmp/cljr-installer.jar
-    echo "export PATH=$PATH:~/.cljr/bin" >> ~/.bashrc
-}
-
 install_stuff
 setup_emacs
 setup_lein
 setup_git
-setup_cljr
