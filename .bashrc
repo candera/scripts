@@ -1,3 +1,6 @@
+# TODO: use something more portable than readlink
+HERE_DIR=$(dirname $(readlink -e ~/.bashrc))
+
 export PATH=$PATH:~/bin
 
 # If not running interactively, don't do anything
@@ -25,7 +28,7 @@ export BoldGreen="\[\033[1;32m\]"    # Green
 export BoldBlue="\[\033[1;34m\]"     # Blue
 
 export GIT_PROMPT_END="\n${BoldGreen}\u@$(cat ~/.machine-name)${ResetColor} $ "
-source ~/projects/bash-git-prompt/gitprompt.sh
+source $HERE_DIR/bash-git-prompt/gitprompt.sh
 
 # don't put duplicate lines or lines starting with space in the history.
 # See bash(1) for more options
