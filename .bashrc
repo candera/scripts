@@ -1,5 +1,10 @@
-# TODO: use something more portable than readlink
-HERE_DIR=$(dirname $(readlink -e ~/.bashrc))
+if [[ `uname` == "Darwin" ]]; then
+    # greadlink requires coreutils; brew install coreutils to get it
+    READLINK_CMD=greadlink
+else
+    READLINK_CMD=readlink
+fi
+HERE_DIR=$(dirname $($READLINK_CMD -e ~/.bashrc))
 
 export PATH=$PATH:~/bin
 
