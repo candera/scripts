@@ -52,3 +52,7 @@ shopt -s checkwinsize
 alias ll='ls -al --color'
 alias emacs='TERM=xterm-256color emacs -nw'
 alias tmux='TERM=xterm-256color tmux'
+
+if [[ -f ~/local.bashrc ]]; then
+    source ~/local.bashrc
+fi
