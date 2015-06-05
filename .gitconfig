@@ -1,7 +1,9 @@
 [user]
-	name = Craig Andera
-	email = candera@wangdera.com
+        name = Craig Andera
+        email = candera@wangdera.com
 [color]
-	ui = auto
+        ui = auto
 [push]
-	default = simple
+        default = simple
+[core]
+	excludesfile = /Users/candera/.gitignore_global

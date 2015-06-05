@@ -4,6 +4,7 @@ if [[ `uname` == "Darwin" ]]; then
 else
     READLINK_CMD=readlink
 fi
+PATH=${PATH}:/usr/local/sbin:/usr/local/bin
 HERE_DIR=$(dirname $($READLINK_CMD -e ~/.bashrc))
 
 export PATH=$PATH:~/bin
