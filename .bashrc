@@ -66,3 +66,6 @@ alias tmux='TERM=xterm-256color tmux'
 if [[ -f ~/local.bashrc ]]; then
     source ~/local.bashrc
 fi
+
+# Settings for boot
+export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx2g -XX:MaxPermSize=128m -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -Xverify:none -XX:-OmitStackTraceInFastThrow"
