@@ -69,3 +69,14 @@ fi
 
 # Settings for boot
 export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx2g -XX:MaxPermSize=128m -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -Xverify:none -XX:-OmitStackTraceInFastThrow"
+
+# Adzerk environment setup
+adzerk_env() {
+    eval "$(gpg -d ~/.adzerk.asc)"
+    export AWS_SECRET_ACCESS_KEY_ID=${ADZERK_AWS_ACCESS_KEY}
+    export AWS_SECRET_ACCESS_KEY=${ADZERK_AWS_ACCESS_KEY}
+    export AWS_ACCESS_KEY_ID=${ADZERK_AWS_ACCESS_KEY}
+    export AWS_ACCESS_KEY=${ADZERK_AWS_ACCESS_KEY}
+    export AWS_SECRET_KEY_ID=${ADZERK_AWS_SECRET_KEY}
+    export AWS_SECRET_KEY=${ADZERK_AWS_SECRET_KEY}
+}
