@@ -1,0 +1,4 @@
+#!/bin/bash
+
+ctags -e -R --languages=Clojure,-JavaScript $* 
+echo "Tags updated"

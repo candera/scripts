@@ -1,0 +1,5 @@
+#!/bin/bash
+
+title transactor
+cd ~/.datomic/install/current
+bin/transactor config/dev-transactor.properties
