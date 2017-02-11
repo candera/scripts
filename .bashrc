@@ -61,6 +61,7 @@ else
     alias ll='ls -al --color'
 fi
 alias emacs='TERM=xterm-256color emacs -nw'
+alias Emacs='open -a /Applications/Emacs.app'
 alias tmux='TERM=xterm-256color tmux'
 
 if [[ -f ~/local.bashrc ]]; then
