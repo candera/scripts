@@ -71,6 +71,9 @@ fi
 # Settings for boot
 export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx2g -XX:MaxPermSize=128m -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -Xverify:none -XX:-OmitStackTraceInFastThrow"
 
+# Enable AWS CLI completion
+complete -C `which aws_completer` aws
+
 # Adzerk environment setup
 adzerk_env() {
     eval "$(gpg -d ~/.adzerk.asc)"
