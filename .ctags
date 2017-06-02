@@ -13,4 +13,4 @@
 --regex-clojure=/\([ \t]*intern[ \t]+([-[:alnum:]<>*+!_:\/.?]+)/\1/v,intern/
 --regex-clojure=/\([ \t]*ns[ \t]+([-[:alnum:]<>*+!_:\/.?]+)/\1/n,namespace/
 --regex-clojure=/\([ \t]*defrecord[ \t]+([-[:alnum:]<>*+!_:\/.?]+)/\1/s,record/
---regex-clojure=/\([ \t]*def[a-z]*[ \t]+([-[:alnum:]<>*+!_:\/.?]+)/\1/s,symbol/
+--regex-clojure=/\([ \t]*def[-[:alnum:]=<>*+!_:\/.?]*[ \t]+([-[:alnum:]<>*+!_:\/.?]+)/\1/s,symbol/
