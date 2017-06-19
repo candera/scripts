@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -x
+
+find $* | entr clojure-tags $*
