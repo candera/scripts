@@ -80,22 +80,33 @@ adzerk_env() {
     if [[ -z "$ADZERK_ENV" ]]; then
         ADZERK_ENV=staging
     fi
-    local ENV_FILE=~/.adzerk-${ADZERK_ENV}.asc
     eval "$(gpg -d ~/.adzerk.asc)"
-    if [[ -e $ENV_FILE ]]; then
-        eval "$(gpg -d ${ENV_FILE})"
-        export AWS_SECRET_ACCESS_KEY_ID=${ADZERK_AWS_SECRET_KEY}
-        export AWS_SECRET_ACCESS_KEY=${ADZERK_AWS_SECRET_KEY}
-        export AWS_ACCESS_KEY_ID=${ADZERK_AWS_ACCESS_KEY}
-        export AWS_ACCESS_KEY=${ADZERK_AWS_ACCESS_KEY}
-        export AWS_SECRET_KEY_ID=${ADZERK_AWS_SECRET_KEY}
-        export AWS_SECRET_KEY=${ADZERK_AWS_SECRET_KEY}
-        export ADZERK_REPO_PATH=~/adzerk/adzerk
-        export ADZERK_DOCKER_MONO_PATH=~/adzerk/mono-docker
-        export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
-    else
-        echo "Unknown environment ${ADZERK_ENV}"
-    fi
+
+    export AWS_SECRET_ACCESS_KEY_ID=${ADZERK_AWS_SECRET_KEY}
+    export AWS_SECRET_ACCESS_KEY=${ADZERK_AWS_SECRET_KEY}
+    export AWS_ACCESS_KEY_ID=${ADZERK_AWS_ACCESS_KEY}
+    export AWS_ACCESS_KEY=${ADZERK_AWS_ACCESS_KEY}
+    export AWS_SECRET_KEY_ID=${ADZERK_AWS_SECRET_KEY}
+    export AWS_SECRET_KEY=${ADZERK_AWS_SECRET_KEY}
+    export ADZERK_REPO_PATH=~/adzerk/adzerk
+    export ADZERK_DOCKER_MONO_PATH=~/adzerk/mono-docker
+    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
+
+    while true; do
+        if [[ "$1" == "" ]]; then
+            break
+        fi
+
+        local ENV_FILE=~/.adzerk-${1}.asc
+        if [[ -e $ENV_FILE ]]; then
+            echo "Loading environment configuration '$1' from $ENV_FILE"
+            eval "$(gpg -d $ENV_FILE)"
+        else
+            echo -e "\033[0;31mUnknown environment '$1'\033[0m"
+        fi
+
+        shift
+    done
 }
 
 function prompt_callback () {
@@ -105,7 +116,7 @@ function prompt_callback () {
         else
             local COLOR=${DimBlueBg}
         fi
-        echo " ${COLOR}[${ADZERK_ENV}]${ResetColor}"
+        echo " ${COLOR}[${ADZERK_ENV} ($ADZERK_MSQLCLI_USER)]${ResetColor}"
     fi
 }
 
