@@ -75,7 +75,13 @@ export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 
 complete -C `which aws_completer` aws
 
 # Adzerk environment setup
+clear_adzerk_env () {
+    unset $(env | grep ADZERK_ | cut -f 1 -d = | xargs echo)
+}
+
 adzerk_env() {
+    clear_adzerk_env
+
     export ADZERK_ENV=$1
     if [[ -z "$ADZERK_ENV" ]]; then
         ADZERK_ENV=staging
