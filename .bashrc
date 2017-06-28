@@ -82,11 +82,26 @@ clear_adzerk_env () {
 adzerk_env() {
     clear_adzerk_env
 
-    export ADZERK_ENV=$1
-    if [[ -z "$ADZERK_ENV" ]]; then
-        ADZERK_ENV=staging
-    fi
-    eval "$(gpg -d ~/.adzerk.asc)"
+    echo "Loading default configuration from ~/.adzerk-defaults.asc"
+    eval "$(gpg --decrypt --quiet ~/.adzerk-defaults.asc)"
+
+    export ADZERK_LOADED_CONFIGS=defaults
+    while true; do
+        if [[ "$1" == "" ]]; then
+            break
+        fi
+
+        local CONFIG_FILE=~/.adzerk-${1}.asc
+        if [[ -e $CONFIG_FILE ]]; then
+            echo "Loading environment configuration '$1' from $CONFIG_FILE"
+            eval "$(gpg --decrypt --quiet $CONFIG_FILE)"
+            export ADZERK_LOADED_CONFIGS="${ADZERK_LOADED_CONFIGS} $1"
+        else
+            echo -e "\033[0;31mUnknown configuration '$1'\033[0m"
+        fi
+
+        shift
+    done
 
     export AWS_SECRET_ACCESS_KEY_ID=${ADZERK_AWS_SECRET_KEY}
     export AWS_SECRET_ACCESS_KEY=${ADZERK_AWS_SECRET_KEY}
@@ -97,22 +112,6 @@ adzerk_env() {
     export ADZERK_REPO_PATH=~/adzerk/adzerk
     export ADZERK_DOCKER_MONO_PATH=~/adzerk/mono-docker
     export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
-
-    while true; do
-        if [[ "$1" == "" ]]; then
-            break
-        fi
-
-        local ENV_FILE=~/.adzerk-${1}.asc
-        if [[ -e $ENV_FILE ]]; then
-            echo "Loading environment configuration '$1' from $ENV_FILE"
-            eval "$(gpg -d $ENV_FILE)"
-        else
-            echo -e "\033[0;31mUnknown environment '$1'\033[0m"
-        fi
-
-        shift
-    done
 }
 
 function prompt_callback () {
@@ -122,7 +121,7 @@ function prompt_callback () {
         else
             local COLOR=${DimBlueBg}
         fi
-        echo " ${COLOR}[${ADZERK_ENV} ($ADZERK_MSQLCLI_USER)]${ResetColor}"
+        echo " ${COLOR}[($ADZERK_MSQLCLI_USER) ${ADZERK_LOADED_CONFIGS}]${ResetColor}"
     fi
 }
 
