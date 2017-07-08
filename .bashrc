@@ -85,6 +85,10 @@ adzerk_env() {
     echo "Loading default configuration from ~/.adzerk-defaults.asc"
     eval "$(gpg --decrypt --quiet ~/.adzerk-defaults.asc)"
 
+    # I think it would be better to store all these config files on
+    # S3, and either sync them locally or do something like
+    # eval "$(aws s3 cp s3://path/to/file -)"
+
     export ADZERK_LOADED_CONFIGS=defaults
     while true; do
         if [[ "$1" == "" ]]; then
