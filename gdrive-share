@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+RECENT=$(gdrive list --no-header | head -1)
+ID=$(echo $RECENT | cut -f 1 -d " ")
+TITLE=$(echo $RECENT | cut -f 2 -d " ")
+
+echo "https://drive.google.com/uc?export=download&id=${ID}" | pbcopy
+
+echo "Link to ${TITLE} copied to clipboard"
