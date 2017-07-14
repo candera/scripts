@@ -1,4 +1,4 @@
-
+-- Copied from https://gist.githubusercontent.com/dulm/ee5ec47cfd2a71ded0e3841ee04e6ea3/raw/79668615f709960c39846149eacebe7db743c948/init.lua
 modal = hs.hotkey.modal.new({}, nil )
 
 function bindKeyMappers(keyMappers,modal)
