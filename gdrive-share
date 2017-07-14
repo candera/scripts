@@ -2,7 +2,8 @@
 
 RECENT=$(gdrive list --no-header | head -1)
 ID=$(echo $RECENT | cut -f 1 -d " ")
-TITLE=$(echo $RECENT | cut -f 2 -d " ")
+# Piping to xargs is a neat trick to trim whitespace
+TITLE=$(gdrive info $ID | grep "Name: " | cut -f 2 -d ":" | xargs)
 
 echo "https://drive.google.com/uc?export=download&id=${ID}" | pbcopy
 
