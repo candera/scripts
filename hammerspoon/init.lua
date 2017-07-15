@@ -1,6 +1,8 @@
 -- Copied from https://gist.githubusercontent.com/dulm/ee5ec47cfd2a71ded0e3841ee04e6ea3/raw/79668615f709960c39846149eacebe7db743c948/init.lua
 modal = hs.hotkey.modal.new({}, nil )
 
+delay = hs.eventtap.keyRepeatDelay()
+
 function bindKeyMappers(keyMappers,modal)
   for i,mapper in ipairs(keyMappers) do
     if modal == nil then
@@ -8,9 +10,12 @@ function bindKeyMappers(keyMappers,modal)
         hs.eventtap.keyStroke(mapper[3],mapper[4])
       end)
     else
-      modal:bind(mapper[1], mapper[2], nil, function()
+      modal:bind(mapper[1], mapper[2], function()
         modal.triggered = true
         hs.eventtap.keyStroke(mapper[3],mapper[4])
+      end, nil, function()
+        modal.triggered = true
+        hs.eventtap.keyStroke(mapper[3],mapper[4], delay)
       end)
     end
   end
