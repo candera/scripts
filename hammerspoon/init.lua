@@ -24,6 +24,9 @@ defaultKeyMappers = {
   {{'ctrl'},'v',{},'pagedown'}, --剪切
   {{'alt'},'v',{},'pageup'}, --复制
 
+  {{'ctrl'},'n',{},'down'},
+  {{'ctrl'},'p',{},'up'}, 
+  
   {{'alt','shift'},',',{'cmd'},'up'}, --文首
   {{'alt','shift'},'.',{'cmd'},'down'}, --文末
 
