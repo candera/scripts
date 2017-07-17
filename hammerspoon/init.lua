@@ -1,7 +1,34 @@
--- Copied from https://gist.githubusercontent.com/dulm/ee5ec47cfd2a71ded0e3841ee04e6ea3/raw/79668615f709960c39846149eacebe7db743c948/init.lua
+-- Based on https://gist.githubusercontent.com/dulm/ee5ec47cfd2a71ded0e3841ee04e6ea3/raw/79668615f709960c39846149eacebe7db743c948/init.lua
 modal = hs.hotkey.modal.new({}, nil )
 
-delay = hs.eventtap.keyRepeatDelay()
+delay = hs.eventtap.keyRepeatDelay() -- ms
+
+print("delay is ", delay)
+
+repeatCountdown = 0
+repeatMapping = nil
+
+function sendMappedKeys()
+   local n = 3
+   while repeatMapping[n] do
+      local modifiers = repeatMapping[n]
+      local char = repeatMapping[n+1]
+      hs.eventtap.event.newKeyEvent(modifiers, char, true):post()
+      -- TODO: Add delay?
+      hs.eventtap.event.newKeyEvent(modifiers, char, false):post()
+      n = n + 2
+   end
+end
+
+repeatTimer = hs.timer.new(0.03,
+                           function()
+                              if repeatCountdown > 0 then
+                                 repeatCountdown = repeatCountdown - 1
+                              elseif repeatMapping then
+                                 sendMappedKeys()
+                              end
+                           end
+)
 
 function bindKeyMappers(keyMappers,modal)
    for i,mapper in ipairs(keyMappers) do
@@ -19,22 +46,36 @@ function bindKeyMappers(keyMappers,modal)
          modal:bind(mapper[1],
                     mapper[2],
                     function()
-                       modal.triggered = true
-                           local n = 3
-                           while mapper[n] do
-                              hs.eventtap.keyStroke(mapper[n],mapper[n+1])
-                              n = n + 2
-                           end
+                       repeatMapping = mapper
+                       sendMappedKeys()
+                       repeatCountdown = 3
+                       repeatTimer:start()
                     end,
-                    nil,
                     function()
-                       modal.triggered = true
-                       local n = 3
-                       while mapper[n] do
-                          hs.eventtap.keyStroke(mapper[n],mapper[n+1],delay)
-                          n = n + 2
-                       end
+                       repeatMapping = nil
+                       repeatTimer:stop()
                     end
+                    -- function()
+                    --    modal.triggered = true
+                    --    local n = 3
+                    --    while mapper[n] do
+                    --       hs.eventtap.keyStroke(mapper[n],mapper[n+1])
+                    --       n = n + 2
+                    --    end
+                    -- end,
+                    -- nil,
+                    -- function()
+                    --    modal.triggered = true
+                    --    local n = 3
+                    --    while mapper[n] do
+                    --       -- Probably a bad idea
+                    --       hs.eventtap.event.newKeyEvent(mapper[n], mapper[n+1], true):post()
+                    --       hs.timer.usleep(delay/2)
+                    --       hs.eventtap.event.newKeyEvent(mapper[n], mapper[n+1], false):post()
+                    --       hs.timer.usleep(delay/2)
+                    --       n = n + 2
+                    --    end
+                    -- end
          )
       end
    end
@@ -138,10 +179,17 @@ function reloadConfig(files)
    end
    if doReload then
       hs.reload()
-      appWatcher:stop()
-      appWatcher = nil
+      -- appWatcher:stop()
+      -- appWatcher = nil
    end
 end
 
 myWatcher = hs.pathwatcher.new(os.getenv('HOME') .. '/.hammerspoon/', reloadConfig):start()
 hs.alert.show('Config loaded')
+
+hs.hotkey.bind({"alt","ctrl","cmd"}, "r",
+   function()
+      hs.reload()
+      hs.alert.show('Config loaded')
+   end
+)
