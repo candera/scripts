@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
-RECENT=$(gdrive list --no-header | head -1)
+set -e
+
+N=1
+if [[ $1 ]]; then
+    N=$1
+fi
+
+RECENT=$(gdrive list --no-header | head -n $N | tail -1)
 ID=$(echo $RECENT | cut -f 1 -d " ")
 # Piping to xargs is a neat trick to trim whitespace
 TITLE=$(gdrive info $ID | grep "Name: " | cut -f 2 -d ":" | xargs)
