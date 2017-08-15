@@ -74,6 +74,19 @@ export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 
 # Enable AWS CLI completion
 complete -C `which aws_completer` aws
 
+# Set background color in iTerm
+
+background () {
+    # Format: rrggbb in hex, e.g. ff0088
+    local COLOR=$1
+    if [[ -z "$COLOR" ]]; then
+        COLOR=$(printf '%02X%02X%02X' $(($RANDOM / 700)) $(($RANDOM / 700)) $(($RANDOM / 700)))
+        echo "Setting background to 0x${COLOR}"
+    fi
+    # Reference https://www.iterm2.com/documentation-escape-codes.html
+    echo -e "\033]Ph${COLOR}\033\\"
+}
+
 # Adzerk environment setup
 clear_adzerk_env () {
     unset $(env | grep ADZERK_ | cut -f 1 -d = | xargs echo)
@@ -125,22 +138,22 @@ function prompt_callback () {
         else
             local COLOR=${DimBlueBg}
         fi
-        echo " ${COLOR}[($ADZERK_MSQLCLI_USER) ${ADZERK_LOADED_CONFIGS}]${ResetColor}"
+        echo " ${COLOR}[($ADZERK_MSQL_USER) ${ADZERK_LOADED_CONFIGS}]${ResetColor}"
     fi
 }
 
 # This prevents Adzerk's Docker setup from picking up on settings like the .bashrc from the host.
 export DOCKER_USER_MODE=no
 
-# Set background color in iTerm
-
-background () {
-    # Format: rrggbb in hex, e.g. ff0088
-    local COLOR=$1
-    if [[ -z "$COLOR" ]]; then
-        COLOR=$(printf '%02X%02X%02X' $(($RANDOM / 700)) $(($RANDOM / 700)) $(($RANDOM / 700)))
-        echo "Setting background to 0x${COLOR}"
+function zerkenv() {
+    source ~/adzerk/zerkenv/zerkenv.sh $@
+    export ADZERK_LOADED_CONFIGS=$(echo $ZERKENV_MODULES)
+    if [[ $ADZERK_MSQL_HOSTNAME =~ ^adzerk\. ]]; then
+        export ADZERK_ENV="prod"
+    else
+        export ADZERK_ENV="non-prod"
     fi
-    # Reference https://www.iterm2.com/documentation-escape-codes.html
-    echo -e "\033]Ph${COLOR}\033\\"
+    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
 }
+
+export ZERKENV_BUCKET=zerkenv
