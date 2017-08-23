@@ -132,13 +132,15 @@ adzerk_env() {
 }
 
 function prompt_callback () {
+    [[ $ADZERK_MSQL_HOSTNAME =~ [^.]+ ]]
+    local ADZERK_DB=${BASH_REMATCH[0]}
     if [[ -n "${ADZERK_ENV}" ]]; then
-        if [[ "${ADZERK_ENV}" == "prod" ]]; then
+        if [[ "${ADZERK_DB}" == "adzerk" ]]; then
             local COLOR=${DimRedBg}
         else
             local COLOR=${DimBlueBg}
         fi
-        echo " ${COLOR}[($ADZERK_MSQL_USER) ${ADZERK_LOADED_CONFIGS}]${ResetColor}"
+        echo " [${COLOR}(${ADZERK_MSQL_USER}@${ADZERK_DB})${ResetColor} ${DimBlueBg}${ADZERK_LOADED_CONFIGS}${ResetColor}]"
     fi
 }
 
@@ -154,6 +156,14 @@ function zerkenv() {
         export ADZERK_ENV="non-prod"
     fi
     export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
+
+    # Backward compatibility: the CLI ones are deprecated
+    export ADZERK_MSQLCLI_HOSTNAME=$ADZERK_MSQL_HOSTNAME
+    export ADZERK_MSQLCLI_PORT=$ADZERK_MSQL_PORT
+    export ADZERK_MSQLCLI_DATABASE=$ADZERK_MSQL_DATABASE
+    export ADZERK_MSQLCLI_USER=$ADZERK_MSQL_USER
+    export ADZERK_MSQLCLI_PASSWORD=$ADZERK_MSQL_PASSWORD
+    export ADZERK_MSQLCLI_P
 }
 
 export ZERKENV_BUCKET=zerkenv
