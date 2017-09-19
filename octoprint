@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -x
+
+APIKEY=$(cat ~/.octoprint/apikey)
+URL=$(cat ~/.octoprint/url)
+FILENAME=$1
+
+if [[ -z $FILENAME ]]
+then
+    echo "You must specify a file to send."
+    exit 1
+fi
+
+echo "Uploading $FILENAME to $URL"
+
+curl -H "X-Api-Key:${APIKEY}" -F "file=@${FILENAME}" $URL/api/files/local
