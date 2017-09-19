@@ -88,48 +88,48 @@ background () {
 }
 
 # Adzerk environment setup
-clear_adzerk_env () {
-    unset $(env | grep ADZERK_ | cut -f 1 -d = | xargs echo)
-}
+# clear_adzerk_env () {
+#     unset $(env | grep ADZERK_ | cut -f 1 -d = | xargs echo)
+# }
 
-adzerk_env() {
-    clear_adzerk_env
+# adzerk_env() {
+#     clear_adzerk_env
 
-    echo "Loading default configuration from ~/.adzerk-defaults.asc"
-    eval "$(gpg --decrypt --quiet ~/.adzerk-defaults.asc)"
+#     echo "Loading default configuration from ~/.adzerk-defaults.asc"
+#     eval "$(gpg --decrypt --quiet ~/.adzerk-defaults.asc)"
 
-    # I think it would be better to store all these config files on
-    # S3, and either sync them locally or do something like
-    # eval "$(aws s3 cp s3://path/to/file -)"
+#     # I think it would be better to store all these config files on
+#     # S3, and either sync them locally or do something like
+#     # eval "$(aws s3 cp s3://path/to/file -)"
 
-    export ADZERK_LOADED_CONFIGS=defaults
-    while true; do
-        if [[ "$1" == "" ]]; then
-            break
-        fi
+#     export ADZERK_LOADED_CONFIGS=defaults
+#     while true; do
+#         if [[ "$1" == "" ]]; then
+#             break
+#         fi
 
-        local CONFIG_FILE=~/.adzerk-${1}.asc
-        if [[ -e $CONFIG_FILE ]]; then
-            echo "Loading environment configuration '$1' from $CONFIG_FILE"
-            eval "$(gpg --decrypt --quiet $CONFIG_FILE)"
-            export ADZERK_LOADED_CONFIGS="${ADZERK_LOADED_CONFIGS} $1"
-        else
-            echo -e "\033[0;31mUnknown configuration '$1'\033[0m"
-        fi
+#         local CONFIG_FILE=~/.adzerk-${1}.asc
+#         if [[ -e $CONFIG_FILE ]]; then
+#             echo "Loading environment configuration '$1' from $CONFIG_FILE"
+#             eval "$(gpg --decrypt --quiet $CONFIG_FILE)"
+#             export ADZERK_LOADED_CONFIGS="${ADZERK_LOADED_CONFIGS} $1"
+#         else
+#             echo -e "\033[0;31mUnknown configuration '$1'\033[0m"
+#         fi
 
-        shift
-    done
+#         shift
+#     done
 
-    export AWS_SECRET_ACCESS_KEY_ID=${ADZERK_AWS_SECRET_KEY}
-    export AWS_SECRET_ACCESS_KEY=${ADZERK_AWS_SECRET_KEY}
-    export AWS_ACCESS_KEY_ID=${ADZERK_AWS_ACCESS_KEY}
-    export AWS_ACCESS_KEY=${ADZERK_AWS_ACCESS_KEY}
-    export AWS_SECRET_KEY_ID=${ADZERK_AWS_SECRET_KEY}
-    export AWS_SECRET_KEY=${ADZERK_AWS_SECRET_KEY}
-    export ADZERK_REPO_PATH=~/adzerk/adzerk
-    export ADZERK_DOCKER_MONO_PATH=~/adzerk/mono-docker
-    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
-}
+#     export AWS_SECRET_ACCESS_KEY_ID=${ADZERK_AWS_SECRET_KEY}
+#     export AWS_SECRET_ACCESS_KEY=${ADZERK_AWS_SECRET_KEY}
+#     export AWS_ACCESS_KEY_ID=${ADZERK_AWS_ACCESS_KEY}
+#     export AWS_ACCESS_KEY=${ADZERK_AWS_ACCESS_KEY}
+#     export AWS_SECRET_KEY_ID=${ADZERK_AWS_SECRET_KEY}
+#     export AWS_SECRET_KEY=${ADZERK_AWS_SECRET_KEY}
+#     export ADZERK_REPO_PATH=~/adzerk/adzerk
+#     export ADZERK_DOCKER_MONO_PATH=~/adzerk/mono-docker
+#     export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
+# }
 
 function prompt_callback () {
     [[ $ADZERK_MSQL_HOSTNAME =~ [^.]+ ]]
@@ -167,3 +167,9 @@ function zerkenv() {
 }
 
 export ZERKENV_BUCKET=zerkenv
+
+alias zc='zerkenv -s clear'
+alias zs='zerkenv -s'
+alias zl='zerkenv -l'
+
+alias adzerk_sqlcmd='sqlcmd -S $ADZERK_MSQL_HOSTNAME -U $ADZERK_MSQL_USER -P $ADZERK_MSQL_PASSWORD -d adzerk'
