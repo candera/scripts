@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+USAGE=$(cat <<EOF
+$(basename $0) [ -v | --verbose ] [ MODEL ... ]
+EOF
+)
+
+while [[ "$1" != "" ]]; do
+   case "$1" in
+       "--help" | "-h")
+         echo "$USAGE"
+         exit 0
+         ;;
+       "-v" | "--verbose")
+         set -x
+         ;;
+       *)
+         if [[ $1 =~ ^- ]]
+         then
+             echo "Unrecognized option $1"
+             echo $USAGE
+             exit 1
+         fi
+         
+         MODELS="$MODELS $1"
+         ;;
+   esac
+   shift
+done
+
+if [[ -z $MODELS ]]
+then
+    MODELS=$(sed '/^module [a-z0-9_-].*().*export/!d;s/module //;s/().*//' base.scad)
+fi
+
+echo Building $MODELS
+
+for MODEL in $MODELS
+do
+  GENERATED_MODELS="$GENERATED_MODELS $MODEL.generated.stl"
+done
+
+make $GENERATED_MODELS
