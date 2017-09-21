@@ -4,10 +4,11 @@ APIKEY=$(cat ~/.octoprint/apikey)
 URL=$(cat ~/.octoprint/url)
 
 USAGE=$(cat <<EOF
-$(basename $0) [ -v | --verbose ] [ --timelapse ] FILE
+$(basename $0) [ -v | --verbose ] [ --timelapse ] [ --fps FPS ] FILE
 EOF
 )
 
+FPS=10
 while [[ "$1" != "" ]]; do
    case "$1" in
        "--help" | "-h")
@@ -16,6 +17,11 @@ while [[ "$1" != "" ]]; do
          ;;
        "--timelapse")
          TIMELAPSE=yes
+         ;;
+       "--fps" )
+         shift
+         TIMELAPSE=yes
+         FPS=$1
          ;;
        "-v" | "--verbose")
          VERBOSE=yes
@@ -55,8 +61,8 @@ then
          <<EOF
 {
   "type" : "timed",
-  "postRoll" : 1,
-  "fps" : 10,
+  "postRoll" : 3,
+  "fps" : $FPS,
   "interval" : 10
 }
 EOF
