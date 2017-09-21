@@ -55,7 +55,7 @@ then
          <<EOF
 {
   "type" : "timed",
-  "postRoll" : 30,
+  "postRoll" : 1,
   "fps" : 10,
   "interval" : 10
 }
