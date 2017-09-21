@@ -29,7 +29,7 @@ while [[ "$1" != "" ]]; do
              exit 1
          fi
 
-         FILENAME=$1
+         INPUTFILE=$1
          ;;
    esac
    shift
@@ -37,7 +37,7 @@ done
 
 CURL_OPTIONS=$(if [[ -n $VERBOSE ]]; then echo "-i"; fi)
 
-if [[ -z $FILENAME ]]
+if [[ -z $INPUTFILE ]]
 then
     echo "You must specify a file to send."
     exit 1
@@ -62,9 +62,12 @@ then
 EOF
 fi
 
-echo "Uploading $FILENAME to $URL"
+TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+FILENAME=$(basename $INPUTFILE .gcode)-$TIMESTAMP.gcode
 
-curl $CURL_OPTIONS -H "X-Api-Key:${APIKEY}" -F "file=@${FILENAME}" $URL/api/files/local
+echo "Uploading $INPUTFILE to $URL as $FILENAME"
+
+curl $CURL_OPTIONS -H "X-Api-Key:${APIKEY}" -F "file=@${INPUTFILE};filename=${FILENAME}" $URL/api/files/local
 
 echo "Printing $FILENAME"
 
