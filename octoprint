@@ -73,7 +73,7 @@ then
          <<EOF
 {
   "type" : "timed",
-  "postRoll" : $POSTROLL,
+  "postRoll" : $POST_ROLL,
   "fps" : $FPS,
   "interval" : $INTERVAL
 }
