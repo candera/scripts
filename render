@@ -28,6 +28,14 @@ while [[ "$1" != "" ]]; do
    shift
 done
 
+if [[ ! -f Makefile ]]
+then
+    echo "Emitting Makefile"
+    cat > Makefile <<EOF
+include ../Makefile
+EOF
+fi
+
 if [[ -z $MODELS ]]
 then
     MODELS=$(sed '/^module [a-z0-9_-].*().*export/!d;s/module //;s/().*//' base.scad)

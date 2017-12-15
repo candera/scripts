@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+USAGE=$(cat <<EOF
+$(basename $0) [ -v | --verbose ] [ --gui | --preview ] [ --ini INIFILE ] [ --filament FILAMENT ] OUTPUT MODEL [ MODEL [ ... ] ]
+EOF
+)
+
+while [[ "$1" != "" ]]; do
+   case "$1" in
+       "--help" | "-h")
+         echo "$USAGE"
+         exit 0
+         ;;
+       "--ini")
+         shift
+         INIFILE=$1
+         ;; 
+       "--gui" | "--preview" )
+         PREVIEW=yes
+         ;;
+       "--filament")
+         shift
+         FILAMENT=$1
+         ;;
+       "-v" | "--verbose")
+         set -x
+         ;;
+       *)
+         if [[ $1 =~ ^- ]]
+         then
+             echo "Unrecognized option $1"
+             echo $USAGE
+             exit 1
+         fi
+         
+         if [[ -z $OUTPUT ]]
+         then
+             OUTPUT=$1
+         else
+           MODELS="$MODELS $1"
+         fi
+         ;;
+   esac
+   shift
+done
+
+if [[ -z $OUTPUT ]]
+then
+    echo "OUTPUT is required"
+    echo $USAGE
+    exit 1
+fi
+
+if [[ -z $FILAMENT ]]
+then
+    echo "FILAMENT is required"
+    echo $USAGE
+    exit 1
+fi
+
+if [[ -z $MODELS ]]
+then
+    echo "At least one model is required"
+    echo $USAGE
+    exit 1
+fi
+
+if [[ -z $INIFILE ]]
+then
+    INIFILE=$OUTPUT.ini
+fi
+
+TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+
+echo "Building STL files..."
+STLS=$(for MODEL in $MODELS; do echo $MODEL.generated.stl; done)
+
+make $STLS
+
+if [[ ! -e $INIFILE ]]
+then
+    echo "${INIFILE} does not exist. Creating an empty file."
+    touch ${INIFILE}
+else
+  echo "Using $INIFILE"
+fi
+
+mkdir -p config
+
+TIMESTAMPED_OUTPUT=${OUTPUT}-${TIMESTAMP}
+
+echo "Building gcode"
+slic3r --load ../config/printer/makergear-m2.ini \
+       --load ../config/filament/${FILAMENT}.ini \
+       --load ${INIFILE} \
+       --save config/$TIMESTAMPED_OUTPUT.ini \
+       --notes "generated_at_${TIMESTAMP}" \
+       --merge $STLS \
+       --output $TIMESTAMPED_OUTPUT.gcode
+
+ln -s -f $TIMESTAMPED_OUTPUT.gcode $OUTPUT.latest.gcode
+ln -s -f config/$TIMESTAMPED_OUTPUT.ini $OUTPUT.latest.ini
+
+if [[ -n $PREVIEW ]]
+then
+    slic3r --gui --load config/$TIMESTAMPED_OUTPUT.ini --merge ${STLS}
+fi
+
