@@ -87,49 +87,18 @@ background () {
     echo -e "\033]Ph${COLOR}\033\\"
 }
 
-# Adzerk environment setup
-# clear_adzerk_env () {
-#     unset $(env | grep ADZERK_ | cut -f 1 -d = | xargs echo)
-# }
-
-# adzerk_env() {
-#     clear_adzerk_env
-
-#     echo "Loading default configuration from ~/.adzerk-defaults.asc"
-#     eval "$(gpg --decrypt --quiet ~/.adzerk-defaults.asc)"
-
-#     # I think it would be better to store all these config files on
-#     # S3, and either sync them locally or do something like
-#     # eval "$(aws s3 cp s3://path/to/file -)"
-
-#     export ADZERK_LOADED_CONFIGS=defaults
-#     while true; do
-#         if [[ "$1" == "" ]]; then
-#             break
-#         fi
-
-#         local CONFIG_FILE=~/.adzerk-${1}.asc
-#         if [[ -e $CONFIG_FILE ]]; then
-#             echo "Loading environment configuration '$1' from $CONFIG_FILE"
-#             eval "$(gpg --decrypt --quiet $CONFIG_FILE)"
-#             export ADZERK_LOADED_CONFIGS="${ADZERK_LOADED_CONFIGS} $1"
-#         else
-#             echo -e "\033[0;31mUnknown configuration '$1'\033[0m"
-#         fi
-
-#         shift
-#     done
-
-#     export AWS_SECRET_ACCESS_KEY_ID=${ADZERK_AWS_SECRET_KEY}
-#     export AWS_SECRET_ACCESS_KEY=${ADZERK_AWS_SECRET_KEY}
-#     export AWS_ACCESS_KEY_ID=${ADZERK_AWS_ACCESS_KEY}
-#     export AWS_ACCESS_KEY=${ADZERK_AWS_ACCESS_KEY}
-#     export AWS_SECRET_KEY_ID=${ADZERK_AWS_SECRET_KEY}
-#     export AWS_SECRET_KEY=${ADZERK_AWS_SECRET_KEY}
-#     export ADZERK_REPO_PATH=~/adzerk/adzerk
-#     export ADZERK_DOCKER_MONO_PATH=~/adzerk/mono-docker
-#     export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
-# }
+# Setup tab and window title functions for iterm2
+# iterm behaviour: until window name is explicitly set, it'll always track tab title.
+# So, to have different window and tab titles, iterm_window() must be called
+# first. iterm_both() resets this behaviour and has window track tab title again).
+# Source: http://superuser.com/a/344397
+set_iterm_name() {
+  mode=$1; shift
+  echo -ne "\033]$mode;$@\007"
+}
+iterm_both () { set_iterm_name 0 $@; }
+iterm_tab () { set_iterm_name 1 $@; }
+iterm_window () { set_iterm_name 2 $@; }
 
 function prompt_callback () {
     [[ $ADZERK_MSQL_HOSTNAME =~ [^.]+ ]]
@@ -148,6 +117,14 @@ function prompt_callback () {
 export DOCKER_USER_MODE=no
 
 function zerkenv() {
+  if [[ -n $INSIDE_EMACS ]]
+  then
+      # Not really working right. Might require `(pinentry-start)` in
+      # my emacs config somewhere, too.
+      eval $(gpg -d --pinentry-mode loopback --use-agent ~/.adzerk-aws-creds.asc)
+  else
+    eval $(gpg -d --quiet ~/.adzerk-aws-creds.asc)
+  fi
     source ~/adzerk/zerkenv/zerkenv.sh $@
     export ADZERK_LOADED_CONFIGS=$(echo $ZERKENV_MODULES)
     if [[ $ADZERK_MSQL_HOSTNAME =~ ^adzerk\. ]]; then
@@ -163,7 +140,6 @@ function zerkenv() {
     export ADZERK_MSQLCLI_DATABASE=$ADZERK_MSQL_DATABASE
     export ADZERK_MSQLCLI_USER=$ADZERK_MSQL_USER
     export ADZERK_MSQLCLI_PASSWORD=$ADZERK_MSQL_PASSWORD
-    export ADZERK_MSQLCLI_P
 }
 
 export ZERKENV_BUCKET=zerkenv
