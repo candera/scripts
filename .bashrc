@@ -34,7 +34,17 @@ export BoldGreen="\[\033[1;32m\]"    # Green
 export BoldBlue="\[\033[1;34m\]"     # Blue
 
 export GIT_PROMPT_END="\n${BoldGreen}\u@$(cat ~/.machine-name)${ResetColor} $ "
-source $HERE_DIR/bash-git-prompt/gitprompt.sh
+
+# I switched to use the brew version of bash-git-prompt. This next
+# line was how I used to do it.
+
+# source $HERE_DIR/bash-git-prompt/gitprompt.sh
+
+# Setup for brew version of bash-git-prompt
+if [ -f "/usr/local/opt/bash-git-prompt/share/gitprompt.sh" ]; then
+    __GIT_PROMPT_DIR="/usr/local/opt/bash-git-prompt/share"
+    source "/usr/local/opt/bash-git-prompt/share/gitprompt.sh"
+fi
 
 # don't put duplicate lines or lines starting with space in the history.
 # See bash(1) for more options
