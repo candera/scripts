@@ -1,3 +1,5 @@
+# -*- sh-basic-offset: 4 -*-
+
 if [[ `uname` == "Darwin" ]]; then
     # greadlink requires coreutils; brew install coreutils to get it
     READLINK_CMD=greadlink
@@ -84,16 +86,33 @@ export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 
 # Enable AWS CLI completion
 complete -C `which aws_completer` aws
 
+# I've been using MySQL 5.7 for stuff, and brew doesn't automatically
+# symlink it into /usr/local/bin because there's a newer version
+
+export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
+
 # Set background color in iTerm
 
 background () {
     # Format: rrggbb in hex, e.g. ff0088
     local COLOR=$1
+    local R=$(($RANDOM / 700))
+    local G=$(($RANDOM / 700))
+    local B=$(($RANDOM / 700))
     if [[ -z "$COLOR" ]]; then
-        COLOR=$(printf '%02X%02X%02X' $(($RANDOM / 700)) $(($RANDOM / 700)) $(($RANDOM / 700)))
-        echo "Setting background to 0x${COLOR}"
+        COLOR=$(printf '%02X%02X%02X' $R $G $B)
+    elif [[ "$COLOR" == "red" ]]
+    then
+        COLOR=$(printf '%02X%02X%02X' $((($R * 5 / 10) + 30)) $G $B)
+    elif [[ "$COLOR" == "green" ]]
+    then
+        COLOR=$(printf '%02X%02X%02X' $R $((($G * 5 / 10) + 30)) $B)
+    elif [[ "$COLOR" == "blue" ]]
+    then
+        COLOR=$(printf '%02X%02X%02X' $R $G $((($B * 5 / 10) + 30)))
     fi
     # Reference https://www.iterm2.com/documentation-escape-codes.html
+    echo "Setting background to 0x${COLOR}"
     echo -e "\033]Ph${COLOR}\033\\"
 }
 
@@ -111,51 +130,77 @@ iterm_tab () { set_iterm_name 1 $@; }
 iterm_window () { set_iterm_name 2 $@; }
 
 function prompt_callback () {
-    [[ $ADZERK_MSQL_HOSTNAME =~ [^.]+ ]]
-    local ADZERK_DB=${BASH_REMATCH[0]}
     if [[ -n "${ADZERK_ENV}" ]]; then
-        if [[ "${ADZERK_DB}" == "adzerk" ]]; then
+        if [[ $ADZERK_MSQL_HOSTNAME =~ \.prod.opzerk.com ]]
+        then
             local COLOR=${DimRedBg}
         else
             local COLOR=${DimBlueBg}
         fi
-        echo " [${COLOR}(${ADZERK_MSQL_USER}@${ADZERK_DB})${ResetColor} ${DimBlueBg}${ADZERK_LOADED_CONFIGS}${ResetColor}]"
+        echo " [${COLOR}(${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME})${ResetColor} ${DimBlueBg}$(echo ${ZERKENV_MODULES})${ResetColor}]"
     fi
 }
 
 # This prevents Adzerk's Docker setup from picking up on settings like the .bashrc from the host.
 export DOCKER_USER_MODE=no
 
-function zerkenv() {
-  if [[ -n $INSIDE_EMACS ]]
-  then
-      # Not really working right. Might require `(pinentry-start)` in
-      # my emacs config somewhere, too.
-      eval $(gpg -d --pinentry-mode loopback --use-agent ~/.adzerk-aws-creds.asc)
-  else
-    eval $(gpg -d --quiet ~/.adzerk-aws-creds.asc)
-  fi
-    source ~/adzerk/zerkenv/zerkenv.sh $@
-    export ADZERK_LOADED_CONFIGS=$(echo $ZERKENV_MODULES)
-    if [[ $ADZERK_MSQL_HOSTNAME =~ ^adzerk\. ]]; then
-        export ADZERK_ENV="prod"
-    else
-        export ADZERK_ENV="non-prod"
-    fi
-    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
 
-    # Backward compatibility: the CLI ones are deprecated
-    export ADZERK_MSQLCLI_HOSTNAME=$ADZERK_MSQL_HOSTNAME
-    export ADZERK_MSQLCLI_PORT=$ADZERK_MSQL_PORT
-    export ADZERK_MSQLCLI_DATABASE=$ADZERK_MSQL_DATABASE
-    export ADZERK_MSQLCLI_USER=$ADZERK_MSQL_USER
-    export ADZERK_MSQLCLI_PASSWORD=$ADZERK_MSQL_PASSWORD
-}
+# function zerkenv() {
+#     if [[ -n $INSIDE_EMACS ]]
+#     then
+#         # Not really working right. Might require `(pinentry-start)` in
+#         # my emacs config somewhere, too.
+#         eval $(gpg -d --pinentry-mode loopback --use-agent ~/.adzerk-aws-creds.asc)
+#     else
+#         eval $(gpg -d --quiet ~/.adzerk-aws-creds.asc)
+#     fi
+#     source ~/adzerk/zerkenv/zerkenv.sh $@
+#     export ADZERK_LOADED_CONFIGS=$(echo $ZERKENV_MODULES)
+#     if [[ $ADZERK_MSQL_HOSTNAME =~ \.prod\. ]]; then
+#         export ADZERK_ENV="prod"
+#     else
+#         export ADZERK_ENV="non-prod"
+#     fi
+#     export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
+
+#     # Backward compatibility: the CLI ones are deprecated
+#     export ADZERK_MSQLCLI_HOSTNAME=$ADZERK_MSQL_HOSTNAME
+#     export ADZERK_MSQLCLI_PORT=$ADZERK_MSQL_PORT
+#     export ADZERK_MSQLCLI_DATABASE=$ADZERK_MSQL_DATABASE
+#     export ADZERK_MSQLCLI_USER=$ADZERK_MSQL_USER
+#     export ADZERK_MSQLCLI_PASSWORD=$ADZERK_MSQL_PASSWORD
+# }
 
 export ZERKENV_BUCKET=zerkenv
+export ZERKENV_REGION=us-east-1
 
-alias zc='zerkenv -s clear'
-alias zs='zerkenv -s'
-alias zl='zerkenv -l'
+export PATH=$PATH:~/adzerk/zerkenv
+
+function zerk() {
+    eval $(gpg -d --quiet ~/.adzerk-aws-creds.asc)
+    if ! ssh-add -l | grep '\.ssh/adzerk\.pem' > /dev/null
+    then
+        ssh-add ~/.ssh/adzerk.pem
+    fi
+    export ADZERK_ENV=" "
+    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin
+
+    ZERKENV_SH_TEMP=$(mktemp)
+    zerkenv -i bash > $ZERKENV_SH_TEMP
+    source $ZERKENV_SH_TEMP
+    rm $ZERKENV_SH_TEMP
+}
+
+# alias zc='zerkenv -s clear'
+# alias zs='zerkenv -s'
+# alias zl='zerkenv -l'
 
 alias adzerk_sqlcmd='sqlcmd -S $ADZERK_MSQL_HOSTNAME -U $ADZERK_MSQL_USER -P $ADZERK_MSQL_PASSWORD -d adzerk'
+
+function wangdera_creds() {
+    eval $(gpg -d ~/wangdera-candera-aws-creds.gpg) 
+}
+
+export EDITOR="emacsclient -nw"
+
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
