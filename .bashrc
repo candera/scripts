@@ -177,7 +177,13 @@ export ZERKENV_REGION=us-east-1
 export PATH=$PATH:~/adzerk/zerkenv
 
 function zerk() {
-    eval $(gpg -d --quiet ~/.adzerk-aws-creds.asc)
+    # eval $(gpg -d --quiet ~/.zerkenv/@aws-creds.sh.asc)
+
+    # This is just to ensure that the gpg agent is running, and that
+    # the key is cached. For whatever weird reason, zerkenv fails when
+    # calling gpg if you haven't recently decrypted something.
+    gpg -d --quiet ~/.zerkenv/@aws-creds.sh.asc > /dev/null
+
     if ! ssh-add -l | grep '\.ssh/adzerk\.pem' > /dev/null
     then
         ssh-add ~/.ssh/adzerk.pem
@@ -189,6 +195,7 @@ function zerk() {
     zerkenv -i bash > $ZERKENV_SH_TEMP
     source $ZERKENV_SH_TEMP
     rm $ZERKENV_SH_TEMP
+    zerkload @aws-creds slack
 }
 
 # alias zc='zerkenv -s clear'
@@ -198,7 +205,7 @@ function zerk() {
 alias adzerk_sqlcmd='sqlcmd -S $ADZERK_MSQL_HOSTNAME -U $ADZERK_MSQL_USER -P $ADZERK_MSQL_PASSWORD -d adzerk'
 
 function wangdera_creds() {
-    eval $(gpg -d ~/wangdera-candera-aws-creds.gpg) 
+    eval $(gpg -d ~/wangdera-candera-aws-creds.gpg)
 }
 
 export EDITOR="emacsclient -nw"
