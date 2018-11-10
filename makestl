@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+USAGE=$(cat <<EOF
+$(basename $0) [ -v | --verbose ] [ -h | --help ] INPUT
+EOF
+)
+
+while [[ "$1" != "" ]]; do
+   case "$1" in
+       "--help" | "-h")
+         echo "$USAGE"
+         exit 0
+         ;;
+       "-v" | "--verbose")
+         set -xv
+         ;;
+       *)
+         if [[ $1 =~ ^- ]]
+         then
+             echo "Unrecognized option $1"
+             echo $USAGE
+             exit 1
+         fi
+         
+         INPUT="$1"
+         ;;
+   esac
+   shift
+done
+
+if [[ -z $INPUT ]]
+then
+  echo "Input file is required"
+  echo
+  echo $USAGE >> /dev/stderr
+  exit 1
+fi
+
+DATESTRING=$(date +%Y%m%d-%H%M%S)
+
+FILENAME="${INPUT%.*}"
+
+cp $INPUT $FILENAME-$DATESTRING.scad
+
+echo "Building $FILENAME-$DATESTRING.stl"
+openscad -o $FILENAME-$DATESTRING.stl $FILENAME-$DATESTRING.scad
+echo "Done"
