@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+
+# set -x
+
+SPOTIFY_CLIENT_ID=342b6fa5fc674056b913082df8fcdae5
+SPOTIFY_AUTH_SCOPES="playlist-read-private+playlist-modify-public+playlist-modify-private+user-top-read"
+CALLBACK_PORT=16648
+
+function print_usage() {
+  cat <<EOF
+$(basename $0)
+  --destination-playlist | -d PLAYLIST_NAME
+  [ --help | -h ]
+  [ --verbose | -v ]
+EOF
+}
+
+while [[ "$1" != "" ]]; do
+    case "$1" in
+        "--destination-playlist" | "-d")
+            shift
+            DESTINATION_PLAYLIST=$1
+            ;;
+        "--verbose" | "-v")
+            set -x
+            ;;
+        "--help" | "-h")
+            print_usage
+            exit 0
+            ;;
+    esac
+    shift
+done
+
+if [[ -z $DESTINATION_PLAYLIST ]]
+then
+  echo "--destination-playlist is required"
+  print_usage
+  exit 1
+fi
+
+echo "Logging in"
+
+SPOTIFY_RESPONSE_ID=$(uuidgen)
+SPOTIFY_AUTH_TOKEN_PATH=$(mktemp -d)/token
+
+# TODO: Do we need to clean this job up on error? I saw weird stuff
+# during development where nc would hang around listening way after
+# this script was dead.
+(
+  set -xv
+  CALLBACK_FILE=$(mktemp)
+  CALLBACK_RECORD=$(mktemp)
+  while [[ ! -f $SPOTIFY_AUTH_TOKEN_PATH ]]
+  do
+    if ! nc -l $CALLBACK_PORT > $CALLBACK_FILE <<EOF
+HTTP/1.1 200 OK
+Content-Type: text/html
+
+<html>
+  <head>
+    <script>
+      if (window.location.hash.length > 0) {
+        window.location.replace("http://localhost:${CALLBACK_PORT}/callback?" + window.location.hash.substring(1));
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Login Complete!</h1>
+    You can close this window and go back to the command line now.
+  </body>
+</html>
+EOF
+    then
+      echo "Failure running the web server. Aborting"
+      exit 2
+    fi
+
+    cat $CALLBACK_FILE >> $CALLBACK_RECORD
+    echo >> $CALLBACK_RECORD
+
+    if cat $CALLBACK_FILE | head -1 | grep "GET /callback?"
+    then
+      cat $CALLBACK_FILE | head -1 | grep -o 'access_token=[^&]*' | cut -f 2 -d = > $SPOTIFY_AUTH_TOKEN_PATH
+    fi
+  done
+  ) &
+
+jobs
+
+open \
+     "https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=http%3A%2F%2Flocalhost:${CALLBACK_PORT}%2fcallback&scope=${SPOTIFY_AUTH_SCOPES}&state=${SPOTIFY_RESPONSE_ID}"
+
+echo "Waiting for authentication"
+while [[ ! -f $SPOTIFY_AUTH_TOKEN_PATH ]]
+do
+  echo -n "."
+  sleep 1
+done
+
+echo
+
+SPOTIFY_AUTH_TOKEN=$(cat $SPOTIFY_AUTH_TOKEN_PATH)
+
+if [[ -z $SPOTIFY_AUTH_TOKEN ]]
+then
+  echo "Unable to log in."
+  exit 1
+else
+  echo "Received auth token $SPOTIFY_AUTH_TOKEN"
+fi
+
+echo "Looking for $DESTINATION_PLAYLIST"
+
+PLAYLISTS=$(mktemp)
+if ! curl --fail \
+     --silent \
+     -X "GET" \
+     -H "Authorization: Bearer $SPOTIFY_AUTH_TOKEN" \
+     -H "Accept: application/json" \
+     -H "Content-Type: application/json" \
+     "https://api.spotify.com/v1/me/playlists?limit=50" \
+     > $PLAYLISTS
+then
+  echo "Failed to retrieve list of playlists"
+  exit 1
+fi
+
+DESTINATION_PLAYLIST_ID=$(cat $PLAYLISTS | jq -r ".items[] | select(.name == \"$DESTINATION_PLAYLIST\") | .id")
+
+DESTINATION_PLAYLIST_COUNT=$(echo "$DESTINATION_PLAYLIST_ID" | wc -l)
+
+if [[ -z $DESTINATION_PLAYLIST_ID ]]
+then
+  echo "Playlist $DESTINATION_PLAYLIST does not exist. TODO: Create it automatically."
+  exit 1
+fi
+
+if [[ $DESTINATION_PLAYLIST_COUNT -ne 1 ]]
+then
+  echo "There are $DESTINATION_PLAYLIST_COUNT instances of a playlist named $DESTINATION_PLAYLIST"
+  exit 1
+fi
+
+echo "Found playlist $DESTINATION_PLAYLIST with ID $DESTINATION_PLAYLIST_ID"
+
+echo "Selecting random artists from top artists list..."
+
+TOP_ARTISTS=$(mktemp)
+if ! curl --silent \
+     --fail \
+     -X "GET" \
+     -H "Accept: application/json" \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer $SPOTIFY_AUTH_TOKEN" \
+     "https://api.spotify.com/v1/me/top/artists?time_range=medium_term" \
+     > $TOP_ARTISTS
+then
+  echo "Failed to retrieve list of top artists"
+  exit 1
+fi
+
+SEED_ARTISTS=$(cat $TOP_ARTISTS \
+  | jq -r '.items[].id' \
+  | sort -r \
+  | head -n 5 \
+  | paste -s -d, -)
+
+echo "Getting recommendations..."
+
+TRACK_LIST=$(mktemp)
+if ! curl --silent \
+     --fail \
+     -H "Accept: application/json" \
+     -X "GET" \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer $SPOTIFY_AUTH_TOKEN" \
+     "https://api.spotify.com/v1/recommendations?market=US&limit=100&seed_artists=$SEED_ARTISTS" \
+     > $TRACK_LIST
+then
+  echo "Failed to retrieve recommendations"
+  exit 1
+fi
+      
+cat $TRACK_LIST | jq -r '.tracks[] | "\(.name)"'
+
+REQUEST_JSON=$(mktemp)
+cat $TRACK_LIST \
+  | jq -r '{uris: .tracks | map(.uri)}' \
+       > $REQUEST_JSON
+
+echo "Adding tracks to playlist..."
+           
+if cat $REQUEST_JSON | \
+    curl -is \
+         --fail \
+     -X "POST" \
+     -H "Accept: application/json" \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer $SPOTIFY_AUTH_TOKEN" \
+     "https://api.spotify.com/v1/playlists/$DESTINATION_PLAYLIST_ID/tracks" \
+     --data-binary @-
+then
+  echo Done
+else
+  echo "Update playlist failed."
+fi
