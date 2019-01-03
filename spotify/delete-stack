@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+aws cloudformation delete-stack \
+    --stack-name spotify-auth
+
+echo "Stack deletion initiated. Waiting for delete to complete."
+
+aws cloudformation wait stack-delete-complete \
+    --stack-name spotify-auth
+
+echo "Done."

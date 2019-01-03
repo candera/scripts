@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -x
+
+aws cloudformation create-stack \
+    --stack-name spotify-auth \
+    --template-body "$(cat $(dirname $0)/oauth-lambda.yml)" \
+    --capabilities CAPABILITY_IAM
