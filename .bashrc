@@ -24,6 +24,9 @@ export CLICOLOR=true
 #keychain -q
 #source ~/.keychain/`hostname`-sh-gpg
 
+GPG_TTY=$(tty)
+export GPG_TTY
+
 # Fancy git prompt
 
 # Colors
@@ -208,6 +211,8 @@ function wangdera_creds() {
     eval $(gpg -d ~/wangdera-candera-aws-creds.gpg)
 }
 
-export EDITOR="emacsclient -nw"
+# ecl is a little wrapper for emacsclient -nw, since passing switches
+# via the environment variable doesn't work very well.
+export EDITOR=ecl
 
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
