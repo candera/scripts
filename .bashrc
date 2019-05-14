@@ -182,23 +182,16 @@ export PATH=$PATH:~/adzerk/zerkenv
 function zerk() {
     # eval $(gpg -d --quiet ~/.zerkenv/@aws-creds.sh.asc)
 
-    # This is just to ensure that the gpg agent is running, and that
-    # the key is cached. For whatever weird reason, zerkenv fails when
-    # calling gpg if you haven't recently decrypted something.
-    gpg -d --quiet ~/.zerkenv/@aws-creds.sh.asc > /dev/null
-
     if ! ssh-add -l | grep '\.ssh/adzerk\.pem' > /dev/null
     then
         ssh-add ~/.ssh/adzerk.pem
     fi
     export ADZERK_ENV=" "
-    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin
+    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/
 
-    ZERKENV_SH_TEMP=$(mktemp)
-    zerkenv -i bash > $ZERKENV_SH_TEMP
-    source $ZERKENV_SH_TEMP
-    rm $ZERKENV_SH_TEMP
-    zerkload @aws-creds slack
+    export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
+    export AWS_SECRET_ACCESS_KEY=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_SECRET_ACCESS_KEY.asc)
+    export ADZERK_SLACK_TOKEN=$(zecret ADZERK_SLACK_TOKEN)
 }
 
 # alias zc='zerkenv -s clear'
@@ -214,5 +207,9 @@ function wangdera_creds() {
 # ecl is a little wrapper for emacsclient -nw, since passing switches
 # via the environment variable doesn't work very well.
 export EDITOR=ecl
+
+# Lets me use jenv without having be root
+export JENV_ROOT=/usr/local/opt/jenv
+eval "$(jenv init -)"
 
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
