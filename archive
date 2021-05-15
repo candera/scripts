@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+USAGE=$(cat <<EOF
+Copies multiple files to the Seagate archive device, preserving the directory hierarchy.
+
+$(basename $0) 
+  [ -v | --verbose ]  
+  [ -h | --help ]
+  [ -d | --delete ]
+  FILE [ FILE ...]
+EOF
+     )
+
+while [[ "$1" != "" ]]; do
+  case "$1" in
+    "--help" | "-h")
+      echo "$USAGE"
+      exit 0
+      ;;
+    "-v" | "--verbose")
+      VERBOSE=yes
+      set -x
+      ;;
+    "-d" | "--delete")
+      DELETE=y
+      ;;
+    *)
+      break
+      ;;
+  esac
+  shift
+done
+
+if [[ -z $1 ]]
+then
+   echo "At least one file must be specified"
+   echo
+   echo "$USAGE"
+   exit 1
+fi
+
+TARGET=/Volumes/Seagate\ Portable\ Drive/archive
+while [[ "$1" != "" ]]
+do
+  RELATIVE_PATH=$(realpath "$1" --relative-to /Users/candera)
+  if [[ "$RELATIVE_PATH" =~ ^\.\. ]]
+  then
+    echo "Cannot archive files outside of /Users/candera" >> /dev/stderr
+    exit 1
+  fi
+  echo Archiving $RELATIVE_PATH
+  if $(mkdir -p "$(dirname "$TARGET/$RELATIVE_PATH")" && gcp -a "/Users/candera/$RELATIVE_PATH" "$TARGET/$RELATIVE_PATH")
+  then
+    echo "Archival successful"
+    if [[ $DELETE == "y" ]]
+    then
+      echo "Removing $RELATIVE_PATH"
+      rm "/Users/candera/$RELATIVE_PATH"
+    fi
+  else
+    echo "Archival failed"
+  fi
+  shift
+done

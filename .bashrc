@@ -97,25 +97,39 @@ export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
 # Set background color in iTerm
 
 background () {
-    # Format: rrggbb in hex, e.g. ff0088
     local COLOR=$1
     local R=$(($RANDOM / 700))
     local G=$(($RANDOM / 700))
     local B=$(($RANDOM / 700))
     if [[ -z "$COLOR" ]]; then
-        COLOR=$(printf '%02X%02X%02X' $R $G $B)
-    elif [[ "$COLOR" == "red" ]]
+        local LINE=$(cat ~/projects/scripts/colornames.csv | tail -n +2 | sort -R | head -n 1)
+    elif [[ "$COLOR" =~ (0x)?[a-fA-F0-9]{6} ]]
     then
-        COLOR=$(printf '%02X%02X%02X' $((($R * 5 / 10) + 30)) $G $B)
-    elif [[ "$COLOR" == "green" ]]
-    then
-        COLOR=$(printf '%02X%02X%02X' $R $((($G * 5 / 10) + 30)) $B)
-    elif [[ "$COLOR" == "blue" ]]
-    then
-        COLOR=$(printf '%02X%02X%02X' $R $G $((($B * 5 / 10) + 30)))
+        local HEX=$(echo $COLOR | sed s/0x//)
+        local LINE="$COLOR,#$HEX"
+        local NODIM=y
+    else
+        local LINE=$(cat ~/projects/scripts/colornames.csv | tail -n +2 | grep -i -e "^$COLOR,")
     fi
+    local NAME=$(echo "$LINE" | sed 's/,.*//')
+    local VAL=$(echo "$LINE" | sed 's/\(.*,#\)\(......\)/\2/' | sed "s/$(printf '\r')//")
+    local RED=$(echo $VAL | sed 's/\(..\)..../\1/')
+    local GRN=$(echo $VAL | sed 's/..\(..\)../\1/')
+    local BLU=$(echo $VAL | sed 's/....\(..\)/\1/')
+
+    if [[ $NODIM == "y" ]]
+    then
+        local DIV=1
+    else
+        local DIV=3
+    fi
+    local R=$(printf "%02x" $((0x${RED} / $DIV)))
+    local G=$(printf "%02x" $((0x${GRN} / $DIV)))
+    local B=$(printf "%02x" $((0x${BLU} / $DIV)))
+
+    COLOR="${R}${G}${B}"
     # Reference https://www.iterm2.com/documentation-escape-codes.html
-    echo "Setting background to 0x${COLOR}"
+    echo "Setting background to $NAME : 0x${COLOR}"
     echo -e "\033]Ph${COLOR}\033\\"
 }
 
@@ -144,35 +158,11 @@ function prompt_callback () {
     fi
 }
 
+# If I want paging in the output, I'll do it myself
+export AWS_PAGER=""
+
 # This prevents Adzerk's Docker setup from picking up on settings like the .bashrc from the host.
 export DOCKER_USER_MODE=no
-
-
-# function zerkenv() {
-#     if [[ -n $INSIDE_EMACS ]]
-#     then
-#         # Not really working right. Might require `(pinentry-start)` in
-#         # my emacs config somewhere, too.
-#         eval $(gpg -d --pinentry-mode loopback --use-agent ~/.adzerk-aws-creds.asc)
-#     else
-#         eval $(gpg -d --quiet ~/.adzerk-aws-creds.asc)
-#     fi
-#     source ~/adzerk/zerkenv/zerkenv.sh $@
-#     export ADZERK_LOADED_CONFIGS=$(echo $ZERKENV_MODULES)
-#     if [[ $ADZERK_MSQL_HOSTNAME =~ \.prod\. ]]; then
-#         export ADZERK_ENV="prod"
-#     else
-#         export ADZERK_ENV="non-prod"
-#     fi
-#     export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts
-
-#     # Backward compatibility: the CLI ones are deprecated
-#     export ADZERK_MSQLCLI_HOSTNAME=$ADZERK_MSQL_HOSTNAME
-#     export ADZERK_MSQLCLI_PORT=$ADZERK_MSQL_PORT
-#     export ADZERK_MSQLCLI_DATABASE=$ADZERK_MSQL_DATABASE
-#     export ADZERK_MSQLCLI_USER=$ADZERK_MSQL_USER
-#     export ADZERK_MSQLCLI_PASSWORD=$ADZERK_MSQL_PASSWORD
-# }
 
 export ZERKENV_BUCKET=zerkenv
 export ZERKENV_REGION=us-east-1
@@ -192,6 +182,7 @@ function zerk() {
     export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
     export AWS_SECRET_ACCESS_KEY=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_SECRET_ACCESS_KEY.asc)
     export ADZERK_SLACK_TOKEN=$(zecret ADZERK_SLACK_TOKEN)
+    export CLUBHOUSE_API_TOKEN=$(gpg -d --quiet ~/.adzerk/secrets/candera/CLUBHOUSE_API_TOKEN.asc)
 }
 
 # alias zc='zerkenv -s clear'
@@ -208,8 +199,24 @@ function wangdera_creds() {
 # via the environment variable doesn't work very well.
 export EDITOR=ecl
 
-# Lets me use jenv without having be root
-export JENV_ROOT=/usr/local/opt/jenv
-eval "$(jenv init -)"
+# # Lets me use jenv without having be root
+# export JENV_ROOT=/usr/local/opt/jenv
+# eval "$(jenv init -)"
 
-[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+function jenv ()
+{
+    local JH=$(/usr/libexec/java_home -v $1)
+    export JAVA_HOME=$JH
+    echo JAVA_HOME=$JH
+}
+
+# [ -f ~/.fzf.bash ] && source ~/.fzf.bash
+
+# emacs-vterm support
+if [[ $INSIDE_EMACS == "vterm" ]]
+then
+    cd() {
+        builtin cd "$@" || return
+        [ "$OLDPWD" = "$PWD" ] || echo -e "\033]51;$(pwd)\033\\"
+    }
+fi
