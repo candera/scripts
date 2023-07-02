@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+CALLBACK_PORT=$1
+TOKEN_FILE=$2
+GPG_RECIPIENT=$3
+
+CALLBACK_FILE=$(mktemp)
+
+# TODO: Do we need to clean this job up on error? I saw weird stuff
+# during development where nc would hang around listening way after
+# this script was dead.
+(
+  # set -xv
+  # CALLBACK_RECORD=$(mktemp)
+  while [[ ! -f $TOKEN_FILE ]]
+  do
+    if ! nc -l $CALLBACK_PORT > $CALLBACK_FILE <<EOF
+HTTP/1.1 200 OK
+Content-Type: text/html
+
+<html>
+  <head>
+    <script>
+      if (window.location.hash.length > 0) {
+        window.location.replace("http://localhost:${CALLBACK_PORT}/callback?" + window.location.hash.substring(1));
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Login Complete!</h1>
+    You can close this window and go back to the command line now.
+  </body>
+</html>
+EOF
+    then
+      echo "Failure running the web server. Aborting"
+      exit 2
+    fi
+
+    # cat $CALLBACK_FILE
+
+    # cat $CALLBACK_FILE >> $CALLBACK_RECORD
+    # echo >> $CALLBACK_RECORD
+
+    LINE=$(cat $CALLBACK_FILE | head -1)
+    if echo $LINE | egrep 'code=[^&]+' > /dev/null
+    then
+      echo $LINE | egrep -o 'code=[^&]+' | cut -f 2 -d = | gpg -e -r $GPG_RECIPIENT > $TOKEN_FILE 
+    fi
+  done
+  rm $CALLBACK_FILE
+  ) & > /dev/null
+
+# jobs
+
+# Give the web server a chance to start
+sleep 1

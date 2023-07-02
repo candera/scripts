@@ -6,7 +6,6 @@ Copies multiple files to the Seagate archive device, preserving the directory hi
 $(basename $0) 
   [ -v | --verbose ]  
   [ -h | --help ]
-  [ -d | --delete ]
   FILE [ FILE ...]
 EOF
      )
@@ -21,9 +20,6 @@ while [[ "$1" != "" ]]; do
       VERBOSE=yes
       set -x
       ;;
-    "-d" | "--delete")
-      DELETE=y
-      ;;
     *)
       break
       ;;
@@ -33,13 +29,13 @@ done
 
 if [[ -z $1 ]]
 then
-   echo "At least one file must be specified"
-   echo
-   echo "$USAGE"
-   exit 1
+  echo "At least one file must be specified"
+  echo
+  echo "$USAGE"
+  exit 1
 fi
 
-TARGET=/Volumes/Seagate\ Portable\ Drive/archive
+TARGET=/Volumes/5TB-A/archive
 while [[ "$1" != "" ]]
 do
   RELATIVE_PATH=$(realpath "$1" --relative-to /Users/candera)
@@ -49,14 +45,15 @@ do
     exit 1
   fi
   echo Archiving $RELATIVE_PATH
-  if $(mkdir -p "$(dirname "$TARGET/$RELATIVE_PATH")" && gcp -a "/Users/candera/$RELATIVE_PATH" "$TARGET/$RELATIVE_PATH")
+  if rsync \
+       --archive \
+       --progress \
+       --remove-source-files\
+       "/Users/candera/${RELATIVE_PATH}" \
+       "$TARGET/$RELATIVE_PATH"
   then
+    trash "/Users/candera/${RELATIVE_PATH}"
     echo "Archival successful"
-    if [[ $DELETE == "y" ]]
-    then
-      echo "Removing $RELATIVE_PATH"
-      rm "/Users/candera/$RELATIVE_PATH"
-    fi
   else
     echo "Archival failed"
   fi

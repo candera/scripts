@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+
+# None of this works yet
+
+# set -x
+
+function print_usage() {
+  cat <<EOF
+$(basename "$0")
+   [ --playlist-name PLAYLIST_NAME ]
+   [ --verbose | -v ]
+   [ --help | -h ]
+
+Given a list of videos on standard input, creates and populates a
+playlist with them. If the quota is exceeded, prints a header with the
+playlist ID and the remaining videos. If the playlist ID header
+appears in the input stream, no playlist is created and population of
+the playlist is resumed.
+
+EOF
+}
+
+while [[ "$1" != "" ]]; do
+  case "$1" in
+    "--playlist-name")
+      shift
+      PLAYLIST_NAME="$1"
+      ;;
+    "--verbose" | "-v")
+      set -x
+      ;;
+    "--help" | "-h")
+      print_usage
+      exit 0
+      ;;
+    *)
+      VIDEO_ID="$1"
+      ;;
+  esac
+  shift
+done
+
+YT_KEY=$(cat ~/.candera-youtube-api-key.asc | gpg -d --quiet)
+YT_CLIENT_ID=$(cat ~/.candera-youtube-client-id.asc | gpg -d --quiet)
+YT_CLIENT_SECRET=$(cat ~/.candera-youtube-client-secret.asc | gpg -d --quiet)
+RESPONSE1=$(mktemp)
+
+TOKEN_FILE=$(mktemp -d)/token
+
+echo "Awaiting token in $TOKEN_FILE" > /dev/stderr
+
+$(dirname $0)/listen 9004 $TOKEN_FILE "candera@wangdera.com" > /dev/stderr
+
+open "https://accounts.google.com/o/oauth2/v2/auth?scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube&response_type=code&state=security_token%3D138r5719ru3e1%26url%3Dhttps%3A%2F%2Foauth2.example.com%2Ftoken&redirect_uri=http%3A//127.0.0.1%3A9004&client_id=$YT_CLIENT_ID"
+
+echo "Waiting for authentication" > /dev/stderr
+while [[ ! -f $TOKEN_FILE ]]
+do
+  echo -n "." > /dev/stderr
+  sleep 1
+done
+echo > /dev/stderr
+
+TOKEN_RESPONSE=$(mktemp)
+
+curl -X POST \
+     --silent \
+     https://oauth2.googleapis.com/token \
+     --data code=$(cat $TOKEN_FILE | gpg -d) \
+     --data client_id=$YT_CLIENT_ID \
+     --data client_secret=$YT_CLIENT_SECRET \
+     --data redirect_uri=http://127.0.0.1:9004 \
+     --data grant_type=authorization_code \
+     > $TOKEN_RESPONSE
+
+ACCESS_TOKEN=$(cat $TOKEN_RESPONSE | jq -r .access_token)
+
+VIDEOS=$(mktemp)
+
+cat - > $VIDEOS
+
+if cat $VIDEOS | head -n 1 | grep "Playlist:"
+then
+  PLAYLIST_ID=$(cat $VIDEOS | head -n 1 | ggrep -oP "(?<=Playlist: ).*")
+  VIDEOS2=$(mktemp)
+  cat $VIDEOS | tail -n +2 > $VIDEOS2
+  VIDEOS=$VIDEOS2
+else
+  CREATE_PLAYLIST_RESPONSE=$(mktemp)
+
+  curl \
+    --silent \
+    -X POST \
+    "https://www.googleapis.com/youtube/v3/playlists?part=snippet" \
+    --header 'Content-Type: application/json' \
+    --header "Authorization: Bearer $ACCESS_TOKEN" \
+    --data-binary @- <<EOF > $CREATE_PLAYLIST_RESPONSE
+{
+   "snippet":
+   {"title": "$PLAYLIST_NAME"}
+}
+EOF
+
+  PLAYLIST_ID=$(jq -r .id $CREATE_PLAYLIST_RESPONSE)
+fi
+
+echo "Adding videos to playlist $PLAYLIST_ID" > /dev/stderr
+
+CREATE_ITEM_RESPONSE=$(mktemp)
+
+for VIDEO in $(cat $VIDEOS)
+do
+  if [[ -n "$SHORT_CIRCUIT" ]]
+  then
+    echo $VIDEO
+  else
+    echo "Adding $VIDEO" > /dev/stderr
+    
+    curl \
+      --include \
+      --silent \
+      -X POST \
+      "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet" \
+      --header 'Content-Type: application/json' \
+      --header "Authorization: Bearer $ACCESS_TOKEN" \
+      --data-binary @- <<EOF > $CREATE_ITEM_RESPONSE
+{
+   "snippet":
+   {"playlistId": "$PLAYLIST_ID",
+    "resourceId": {
+      "kind": "youtube#video",
+      "videoId": "$VIDEO"
+     }
+   }
+}
+EOF
+
+    if ! cat $CREATE_ITEM_RESPONSE | head -1 | grep 200 > /dev/null
+    then
+      echo "Failed" > /dev/stderr
+      echo > /dev/stderr
+
+      # Strip HTTP response and headers
+      if [[ $(cat $CREATE_ITEM_RESPONSE | tr -d '\r' | awk '{if(body)print;if($0=="")body=1}' \
+		| jq -r '.error.errors[0].reason') == "quotaExceeded" ]]
+      then
+	echo "Quota exceeded. Remainder of videos listed below." > /dev/stderr
+	echo > /dev/stderr
+	echo "Playlist: $PLAYLIST_ID"
+	echo $VIDEO
+	SHORT_CIRCUIT=yes
+      else
+	cat $CREATE_ITEM_RESPONSE > /dev/stderr
+	exit 1
+      fi
+    fi
+
+  fi
+done
+
+open https://youtube.com/watch?list=$PLAYLIST_ID

@@ -45,11 +45,12 @@ export GIT_PROMPT_END="\n${BoldGreen}\u@$(cat ~/.machine-name)${ResetColor} $ "
 
 # source $HERE_DIR/bash-git-prompt/gitprompt.sh
 
-# Setup for brew version of bash-git-prompt
-if [ -f "/usr/local/opt/bash-git-prompt/share/gitprompt.sh" ]; then
-    __GIT_PROMPT_DIR="/usr/local/opt/bash-git-prompt/share"
-    source "/usr/local/opt/bash-git-prompt/share/gitprompt.sh"
-fi
+# # Setup for brew version of bash-git-prompt
+# GIT_PROMPT_FETCH_REMOTE_STATUS=0   # avoid fetching remote status
+# if [ -f "/usr/local/opt/bash-git-prompt/share/gitprompt.sh" ]; then
+#     __GIT_PROMPT_DIR="/usr/local/opt/bash-git-prompt/share"
+#     source "/usr/local/opt/bash-git-prompt/share/gitprompt.sh"
+# fi
 
 # don't put duplicate lines or lines starting with space in the history.
 # See bash(1) for more options
@@ -79,12 +80,14 @@ alias emacs='TERM=xterm-256color emacs -nw'
 alias Emacs='open -a /Applications/Emacs.app'
 alias tmux='TERM=xterm-256color tmux'
 
+alias python=python3
+
 if [[ -f ~/local.bashrc ]]; then
     source ~/local.bashrc
 fi
 
 # Settings for boot
-export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx2g -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -Xverify:none -XX:-OmitStackTraceInFastThrow"
+# export BOOT_JVM_OPTIONS="-client -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx2g -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -Xverify:none -XX:-OmitStackTraceInFastThrow"
 
 # Enable AWS CLI completion
 complete -C `which aws_completer` aws
@@ -154,12 +157,26 @@ function prompt_callback () {
         else
             local COLOR=${DimBlueBg}
         fi
-        echo " [${COLOR}(${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME})${ResetColor} ${DimBlueBg}$(echo ${ZERKENV_MODULES})${ResetColor}]"
+
+	local NOW=$(date +%s)
+
+	if [[ ! -a ~/.last-sso-check || $(( $NOW - $(cat ~/.last-sso-check) )) -gt 600 ]]
+	then
+	    if ! (aws sts get-caller-identity >/dev/null 2>/dev/null)
+	    then
+		LOGIN_STATUS="${Yellow}X${ResetColor} "
+	    fi
+	    echo $NOW > ~/.last-sso-check
+	fi
+        echo -e " ${LOGIN_STATUS}[${COLOR}(${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME})${ResetColor} ${DimBlueBg}$(echo ${ZERKENV_MODULES})${ResetColor}]"
     fi
 }
 
 # If I want paging in the output, I'll do it myself
 export AWS_PAGER=""
+
+# Gives auto complete in the aws shell (run aws with no args)
+export AWS_CLI_AUTO_PROMPT=on-partial
 
 # This prevents Adzerk's Docker setup from picking up on settings like the .bashrc from the host.
 export DOCKER_USER_MODE=no
@@ -169,27 +186,63 @@ export ZERKENV_REGION=us-east-1
 
 export PATH=$PATH:~/adzerk/zerkenv
 
+function zsso() {
+    # Automate popping a browser open to log in via SSO, only if I'm not already
+    # logged in.
+    if [[ -z "$1" ]]
+    then
+	cat ~/.aws/config | grep profile
+	read -p "> "
+	export AWS_PROFILE=$REPLY
+    else     
+	export AWS_PROFILE=$1
+    fi
+
+    aws sts get-caller-identity >/dev/null 2>/dev/null \
+	|| aws sso login
+}
+
+eval "$(jenv init -)"
+
 function zerk() {
     # eval $(gpg -d --quiet ~/.zerkenv/@aws-creds.sh.asc)
+
+    zsso $1 || return 1
 
     if ! ssh-add -l | grep '\.ssh/adzerk\.pem' > /dev/null
     then
         ssh-add ~/.ssh/adzerk.pem
     fi
     export ADZERK_ENV=" "
-    export PATH=$PATH:~/adzerk/cli-tools/micha:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/
+    export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/
+    
+    # export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
+    # export AWS_SECRET_ACCESS_KEY=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_SECRET_ACCESS_KEY.asc)
 
-    export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
-    export AWS_SECRET_ACCESS_KEY=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_SECRET_ACCESS_KEY.asc)
     export ADZERK_SLACK_TOKEN=$(zecret ADZERK_SLACK_TOKEN)
-    export CLUBHOUSE_API_TOKEN=$(gpg -d --quiet ~/.adzerk/secrets/candera/CLUBHOUSE_API_TOKEN.asc)
+    export SHORTCUT_API_TOKEN=$(gpg -d --quiet ~/.adzerk/secrets/candera/CLUBHOUSE_API_TOKEN.asc)
+
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
+    [ -s "/usr/local/opt/nvm/etc/bash_completion.d/nvm" ] && . "/usr/local/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+
+    export KEVEL_SUPPRESS_HOOK_WARNING='y'
+
+    # If this doesn't work, you might need to do something like `jenv add /usr/local/Cellar/openjdk@17/17.0.7/` possibly followed by `hash -r`
+    jenv shell 17.0.7
 }
 
-# alias zc='zerkenv -s clear'
-# alias zs='zerkenv -s'
-# alias zl='zerkenv -l'
+alias geir='zerk jha-devops jha-devops && nvm use 14.17.3 && cd ~/adzerk/geir && background purple'
+alias api-proxy='zerk jha-devops && cd ~/adzerk/api-proxy && background blue'
+alias hairstyles='zerk jha-devops && cd ~/adzerk/adzerk && background grey'
+alias publisher='zerk jha-devops && cd ~/adzerk/publisher && background green'
+alias integration-tests='zerk jha-devops && cd ~/adzerk/integration-tests && background red'
+alias teammgmt='zerk jha-devops && cd ~/adzerk/teammgmt && background white'
+alias snotra='zerk jha-devops && cd ~/adzerk/snotra && background teal'
+alias audit-log-writer='zerk jha-devops && cd ~/adzerk/audit-log-writer && background forest'
+alias getsmarterandmakestuff='wangdera_creds && cd ~/projects/getsmarterandmakestuff.com && background 0x010221'
 
-alias adzerk_sqlcmd='sqlcmd -S $ADZERK_MSQL_HOSTNAME -U $ADZERK_MSQL_USER -P $ADZERK_MSQL_PASSWORD -d adzerk'
+alias vmt='background 000033 && title VMT && export VMT_DEV_OPEN_WINDOW_EARLY=1 VMT_DEV_SHOW_TEST_WINDOW && cd ~/projects/vmt && jenv 16'
 
 function wangdera_creds() {
     eval $(gpg -d ~/wangdera-candera-aws-creds.gpg)
@@ -203,12 +256,20 @@ export EDITOR=ecl
 # export JENV_ROOT=/usr/local/opt/jenv
 # eval "$(jenv init -)"
 
-function jenv ()
-{
-    local JH=$(/usr/libexec/java_home -v $1)
-    export JAVA_HOME=$JH
-    echo JAVA_HOME=$JH
-}
+# function jenv ()
+# {
+#     if [[ $1 == "17" ]]
+#     then
+# 	export JAVA_HOME=/usr/local/Cellar/openjdk/17.0.1/
+#     else
+# 	local JH=$(/usr/libexec/java_home -v $1)
+# 	export JAVA_HOME=$JH
+#     fi
+#     echo JAVA_HOME=$JAVA_HOME
+# }
+
+# Set default to 17
+# jenv 17
 
 # [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
@@ -220,3 +281,78 @@ then
         [ "$OLDPWD" = "$PWD" ] || echo -e "\033]51;$(pwd)\033\\"
     }
 fi
+
+# For remote access, e.g. TRAMP, don't confuse the emacs
+case "$TERM" in
+    "dumb")
+        export PS1="> "
+        ;;
+    # xterm*|rxvt*|eterm*|screen*)
+    #     tty -s && export PS1="some crazy prompt stuff"
+    #     ;;
+esac
+
+# Bash completion
+[[ -r "/usr/local/etc/profile.d/bash_completion.sh" ]] && . "/usr/local/etc/profile.d/bash_completion.sh"
+
+# Trying this as an alternative to bash-git-prompy
+source /usr/local/opt/gitstatus/gitstatus.prompt.sh
+
+function echoc() {
+  echo -e "${1}$2${ResetColor}" | sed 's/\\\]//g'  | sed 's/\\\[//g'
+}
+
+function prompt() {
+    local IS_JHA
+    if [[ -n $AWS_PROFILE ]]
+    then
+	PROFILE="${AWS_PROFILE}:"
+	if [[ $PROFILE =~ jha- ]]
+	then
+	    IS_JHA=yes
+	fi
+    fi
+
+    if [[ -n "${ADZERK_ENV}" || -n "${AWS_PROFILE}" ]]
+    then
+	echo -ne "["
+        if [[ $ADZERK_MSQL_HOSTNAME =~ \.prod.opzerk.com || "$IS_JHA" == "yes" ]]
+        then
+            echo -ne "\e[1;41m"
+        else
+            echo -ne "\e[1;44m"
+        fi
+
+	echo -ne "${PROFILE}${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME}\e[0m] "
+    fi
+
+    gitstatus_prompt_update
+    
+    if [[ -n $GITSTATUS_PROMPT ]]
+    then
+	echo -e "{${GITSTATUS_PROMPT:+$GITSTATUS_PROMPT}}"
+    fi
+}
+
+# I had a hell of a time with this. Bash wants escape sequences
+# surrounded by `\[` and `\]` to indicate they are unprintable, but I
+# get different behavior when those are used in PROMPT_COMMAND vs.
+# PS1, resulting in literal \[ and \] characters in the prompt.
+PROMPT_COMMAND=prompt
+PS1='\[\e[33m\]$(dirs +0)\[\e[0m\] \[\e[32m\]$(whoami)@$(cat ~/.machine-name)\[\e[0m\] \[\e[97;1m\]$\[\e[0m\] '
+
+function gitstatus_help() {
+    echo "master	current branch
+#v1	HEAD is tagged with v1; not shown when on a branch
+@5fc6fca4	current commit; not shown when on a branch or tag
+⇣1	local branch is behind the remote by 1 commit
+⇡2	local branch is ahead of the remote by 2 commits
+⇠3	local branch is behind the push remote by 3 commits
+⇢4	local branch is ahead of the push remote by 4 commits
+*5	there are 5 stashes
+merge	merge is in progress (could be some other action)
+~6	there are 6 merge conflicts
++7	there are 7 staged changes
+!8	there are 8 unstaged changes
+?9	there are 9 untracked files"
+}

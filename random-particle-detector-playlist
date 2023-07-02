@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# set -x
+
+HERE=$(greadlink -e $0)
+SELECTED="$(cat $(dirname $HERE)/spotify/particle-detector-playlists.tsv | shuf | head -1)"
+echo Opening $(echo "$SELECTED" | cut -f 1)
+open $(echo "$SELECTED" | cut -f 3)

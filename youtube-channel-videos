@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+# None of this works yet
+
+# set -x
+
+function print_usage() {
+  cat <<EOF
+$(basename "$0")
+   VIDEO_ID
+   [ --verbose | -v ]
+   [ --help | -h ]
+
+Given a video ID from the URL of a YouTube video, prints a list of all
+the videos on the channel, in upload order.
+
+EOF
+}
+
+while [[ "$1" != "" ]]; do
+  case "$1" in
+    "--verbose" | "-v")
+      set -x
+      ;;
+    "--help" | "-h")
+      print_usage
+      exit 0
+      ;;
+    *)
+      VIDEO_ID="$1"
+      ;;
+  esac
+  shift
+done
+
+if [[ -z $VIDEO_ID ]]
+then
+  echo "Missing VIDEO_ID" > /dev/stderr
+  echo
+  print_usage
+  exit 1
+fi
+
+YT_KEY=$(cat ~/.candera-youtube-api-key.asc | gpg -d --quiet)
+# YT_CLIENT_ID=$(cat ~/.candera-youtube-client-id.asc | gpg -d --quiet)
+# YT_CLIENT_SECRET=$(cat ~/.candera-youtube-client-secret.asc | gpg -d --quiet)
+RESPONSE1=$(mktemp)
+
+echo "Looking up video $VIDEO_ID" > /dev/stderr
+
+curl \
+  --silent \
+  "https://youtube.googleapis.com/youtube/v3/videos?key=$YT_KEY&id=$VIDEO_ID&part=snippet" \
+  --header 'Accept: application/json' \
+  --compressed \
+  > $RESPONSE1
+
+CHANNEL_ID=$(cat $RESPONSE1 | jq -r '.items[0].snippet.channelId')
+
+RESPONSE2=$(mktemp)
+
+echo "Found on channel $CHANNEL_ID. Looking up channel details." > /dev/stderr
+curl \
+  --silent \
+  "https://youtube.googleapis.com/youtube/v3/channels?key=$YT_KEY&id=$CHANNEL_ID&part=contentDetails&part=snippet" \
+  --header 'Accept: application/json' \
+  --compressed \
+  > $RESPONSE2
+
+UPLOADS_PLAYLIST=$(cat $RESPONSE2 | jq -r '.items[0].contentDetails.relatedPlaylists.uploads')
+CHANNEL_NAME=$(cat $RESPONSE2 | jq -r '.items[0].snippet.title')
+
+echo -n "Channel is $CHANNEL_NAME. Listing videos" > /dev/stderr
+
+NEXT=start
+
+FOUND_VIDEOS=$(mktemp)
+
+while [[ -n $NEXT ]]
+do
+  if [[ "$NEXT" != "start" ]]
+  then
+    NEXT_PARAM="&pageToken=$NEXT"
+  else
+    NEXT_PARAM=""
+  fi
+
+  RESPONSE3=$(mktemp)
+
+  curl \
+    --silent \
+    "https://youtube.googleapis.com/youtube/v3/playlistItems?key=$YT_KEY&playlistId=$UPLOADS_PLAYLIST&part=contentDetails&maxResults=50$NEXT_PARAM" \
+    --header 'Accept: application/json' \
+    --compressed \
+    > $RESPONSE3
+
+  cat $RESPONSE3 | jq -r '.items[].contentDetails | [ .videoPublishedAt, .videoId] | @tsv' >> $FOUND_VIDEOS
+
+  NEXT=$(cat $RESPONSE3 | jq -r '.nextPageToken')
+
+  if [[ $NEXT == "null" ]]
+  then
+    NEXT=
+  fi
+
+  echo -n "." > /dev/stderr
+  
+done
+
+echo > /dev/stderr
+
+VIDEO_COUNT=$(cat $FOUND_VIDEOS | wc -l)
+
+if [[ $VIDEO_COUNT -eq 0 ]]
+then
+  echo "Nothing to do. Exiting." > /dev/stderr
+  exit 1
+fi
+
+echo "Found $VIDEO_COUNT videos." > /dev/stderr
+
+FOUNDDIR=$(mktemp -d)
+
+cd $FOUNDDIR
+
+cat $FOUND_VIDEOS | sort -k 1 | cut -f 2
+
