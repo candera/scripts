@@ -79,7 +79,7 @@ VIDEOS=$(mktemp)
 
 cat - > $VIDEOS
 
-if cat $VIDEOS | head -n 1 | grep "Playlist:"
+if cat $VIDEOS | head -n 1 | grep "Playlist:" > /dev/null
 then
   PLAYLIST_ID=$(cat $VIDEOS | head -n 1 | ggrep -oP "(?<=Playlist: ).*")
   VIDEOS2=$(mktemp)

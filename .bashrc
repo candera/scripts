@@ -187,19 +187,45 @@ export ZERKENV_REGION=us-east-1
 export PATH=$PATH:~/adzerk/zerkenv
 
 function zsso() {
+    local SELECTED_PROFILE
     # Automate popping a browser open to log in via SSO, only if I'm not already
     # logged in.
-    if [[ -z "$1" ]]
+    if [[ -z "$AWS_PROFILE" ]]
     then
-	cat ~/.aws/config | grep profile
-	read -p "> "
-	export AWS_PROFILE=$REPLY
-    else     
-	export AWS_PROFILE=$1
+	if [[ -z "$1" ]]
+	then
+	    PROFILES=$(mktemp)
+	    cat ~/.aws/config | grep profile | cat -n > $PROFILES
+	    cat $PROFILES | column -t
+	    read -p "> "
+	    export AWS_PROFILE=$(cat $PROFILES \
+				     | tail -n +$REPLY \
+				     | head -n 1 \
+				     | cut -f 2 \
+				     | sed -nr 's/\[profile (.*)\]/\1/p')
+	else     
+	    export AWS_PROFILE=$1
+	fi
+    fi
+
+    if [[ $AWS_PROFILE =~ ^jha- && $AWS_PROFILE != "jha-devops-readonly" ]]
+    then
+	echo "Escalation required"
+	SELECTED_PROFILE=$AWS_PROFILE
+	AWS_PROFILE=jha-devops-readonly
     fi
 
     aws sts get-caller-identity >/dev/null 2>/dev/null \
-	|| aws sso login
+	|| aws sso login || return 1
+
+    eval $(aws configure export-credentials --profile $AWS_PROFILE --format env)
+
+    if [[ -n $SELECTED_PROFILE ]]
+    then
+	read -p "Escalation story: "
+	eval $(~/adzerk/infrastructure/scripts/pacs -t $REPLY -e)
+	AWS_PROFILE=$SELECTED_PROFILE
+    fi
 }
 
 eval "$(jenv init -)"
@@ -214,7 +240,7 @@ function zerk() {
         ssh-add ~/.ssh/adzerk.pem
     fi
     export ADZERK_ENV=" "
-    export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/
+    export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/:~/adzerk/infrastructure/scripts
     
     # export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
     # export AWS_SECRET_ACCESS_KEY=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_SECRET_ACCESS_KEY.asc)
@@ -232,14 +258,14 @@ function zerk() {
     jenv shell 17.0.7
 }
 
-alias geir='zerk jha-devops jha-devops && nvm use 14.17.3 && cd ~/adzerk/geir && background purple'
-alias api-proxy='zerk jha-devops && cd ~/adzerk/api-proxy && background blue'
-alias hairstyles='zerk jha-devops && cd ~/adzerk/adzerk && background grey'
-alias publisher='zerk jha-devops && cd ~/adzerk/publisher && background green'
-alias integration-tests='zerk jha-devops && cd ~/adzerk/integration-tests && background red'
-alias teammgmt='zerk jha-devops && cd ~/adzerk/teammgmt && background white'
-alias snotra='zerk jha-devops && cd ~/adzerk/snotra && background teal'
-alias audit-log-writer='zerk jha-devops && cd ~/adzerk/audit-log-writer && background forest'
+alias geir='zerk && nvm use 14.17.3 && cd ~/adzerk/geir && background purple'
+alias api-proxy='zerk && cd ~/adzerk/api-proxy && background blue'
+alias hairstyles='zerk && cd ~/adzerk/adzerk && background grey'
+alias publisher='zerk && cd ~/adzerk/publisher && background green'
+alias integration-tests='zerk && cd ~/adzerk/integration-tests && background red'
+alias teammgmt='zerk && cd ~/adzerk/teammgmt && background white'
+alias snotra='zerk  && cd ~/adzerk/snotra && background teal'
+alias audit-log-writer='zerk && cd ~/adzerk/audit-log-writer && background forest'
 alias getsmarterandmakestuff='wangdera_creds && cd ~/projects/getsmarterandmakestuff.com && background 0x010221'
 
 alias vmt='background 000033 && title VMT && export VMT_DEV_OPEN_WINDOW_EARLY=1 VMT_DEV_SHOW_TEST_WINDOW && cd ~/projects/vmt && jenv 16'
@@ -304,6 +330,7 @@ function echoc() {
 
 function prompt() {
     local IS_JHA
+    local PROFILE
     if [[ -n $AWS_PROFILE ]]
     then
 	PROFILE="${AWS_PROFILE}:"
