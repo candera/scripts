@@ -187,31 +187,35 @@ export ZERKENV_REGION=us-east-1
 export PATH=$PATH:~/adzerk/zerkenv
 
 function zsso() {
-    local SELECTED_PROFILE
+    local ESCALATE
     # Automate popping a browser open to log in via SSO, only if I'm not already
     # logged in.
-    if [[ -z "$AWS_PROFILE" ]]
+    if [[ -z "$AWS_PROFILE" || "$1" == "--ask" ]]
     then
-	if [[ -z "$1" ]]
+	if [[ -z "$1" || "$1" == "--ask" ]]
 	then
 	    PROFILES=$(mktemp)
-	    cat ~/.aws/config | grep profile | cat -n > $PROFILES
+	    cat ~/.aws/config \
+		| grep profile \
+		| sed -nr 's/\[profile (.*)\]/\1/p' \
+		| cat <(echo "jha-escalated") - \
+		| cat -n \
+		      > $PROFILES
 	    cat $PROFILES | column -t
 	    read -p "> "
 	    export AWS_PROFILE=$(cat $PROFILES \
-				     | tail -n +$REPLY \
-				     | head -n 1 \
 				     | cut -f 2 \
-				     | sed -nr 's/\[profile (.*)\]/\1/p')
+				     | tail -n +$REPLY \
+				     | head -n 1)
 	else     
 	    export AWS_PROFILE=$1
 	fi
     fi
 
-    if [[ $AWS_PROFILE =~ ^jha- && $AWS_PROFILE != "jha-devops-readonly" ]]
+    if [[ $AWS_PROFILE =~ "jha-escalated" ]]
     then
-	echo "Escalation required"
-	SELECTED_PROFILE=$AWS_PROFILE
+	echo "Escalation requested"
+	ESCALATE=y
 	AWS_PROFILE=jha-devops-readonly
     fi
 
@@ -220,11 +224,12 @@ function zsso() {
 
     eval $(aws configure export-credentials --profile $AWS_PROFILE --format env)
 
-    if [[ -n $SELECTED_PROFILE ]]
+    if [[ "$ESCALATE" == "y" ]]
     then
 	read -p "Escalation story: "
 	eval $(~/adzerk/infrastructure/scripts/pacs -t $REPLY -e)
-	AWS_PROFILE=$SELECTED_PROFILE
+	unset AWS_PROFILE
+	AWS_DISPLAY_PROFILE=jha-escalated
     fi
 }
 
@@ -330,17 +335,16 @@ function echoc() {
 
 function prompt() {
     local IS_JHA
-    local PROFILE
-    if [[ -n $AWS_PROFILE ]]
+    local PROFILE=${AWS_PROFILE:=$AWS_DISPLAY_PROFILE}
+    if [[ -n $PROFILE ]]
     then
-	PROFILE="${AWS_PROFILE}:"
 	if [[ $PROFILE =~ jha- ]]
 	then
 	    IS_JHA=yes
 	fi
     fi
 
-    if [[ -n "${ADZERK_ENV}" || -n "${AWS_PROFILE}" ]]
+    if [[ -n "${ADZERK_ENV}" || -n "${PROFILE}" ]]
     then
 	echo -ne "["
         if [[ $ADZERK_MSQL_HOSTNAME =~ \.prod.opzerk.com || "$IS_JHA" == "yes" ]]
