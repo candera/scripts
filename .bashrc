@@ -187,12 +187,30 @@ export ZERKENV_REGION=us-east-1
 export PATH=$PATH:~/adzerk/zerkenv
 
 function zsso() {
-    local ESCALATE
+    local ESCALATE NO_PROFILE ASK IS_NUMBER GET_PROFILE
     # Automate popping a browser open to log in via SSO, only if I'm not already
     # logged in.
-    if [[ -z "$AWS_PROFILE" || "$1" == "--ask" ]]
+
+    if [[ -z "$AWS_PROFILE" ]];
     then
-	if [[ -z "$1" || "$1" == "--ask" ]]
+	NO_PROFILE=y
+    fi
+
+    if [[ "$1" == "--ask" ]]
+    then
+	ASK=y
+    fi
+
+    if [[ "$1" =~ [0-9]+ ]]
+    then
+	IS_NUMBER=y
+    fi
+
+    GET_PROFILE=$(if [[ -n $NO_PROFILE || -n $ASK || -n $IS_NUMBER ]]; then echo yes; fi)
+
+    if [[ -n $GET_PROFILE ]]
+    then
+	if [[ -z "$1" || -n $ASK || -n $IS_NUMBER ]] 
 	then
 	    PROFILES=$(mktemp)
 	    cat ~/.aws/config \
@@ -201,8 +219,13 @@ function zsso() {
 		| cat <(echo "jha-escalated") - \
 		| cat -n \
 		      > $PROFILES
-	    cat $PROFILES | column -t
-	    read -p "> "
+	    if [[ -z $IS_NUMBER ]]
+	    then
+		cat $PROFILES | column -t
+		read -p "> "
+	    else
+		REPLY=$1
+	    fi
 	    export AWS_PROFILE=$(cat $PROFILES \
 				     | cut -f 2 \
 				     | tail -n +$REPLY \
@@ -226,10 +249,22 @@ function zsso() {
 
     if [[ "$ESCALATE" == "y" ]]
     then
-	read -p "Escalation story: "
-	eval $(~/adzerk/infrastructure/scripts/pacs -t $REPLY -e)
+	if [[ -n $KEVEL_TICKET ]]
+	then
+	    read -p "Escalation story [$KEVEL_TICKET]: "
+	else
+	    read -p "Escalation story: "
+	fi
+	export KEVEL_TICKET=${REPLY:-$KEVEL_TICKET}
+	eval $(~/adzerk/infrastructure/scripts/pacs -t $KEVEL_TICKET -e)
 	unset AWS_PROFILE
 	AWS_DISPLAY_PROFILE=jha-escalated
+    fi
+
+    # It's a good time to grab the secret since we may not have been able to get it previously
+    if [[ -z $ADZERK_SLACK_TOKEN ]]
+    then
+	export ADZERK_SLACK_TOKEN=$(zecret ADZERK_SLACK_TOKEN 2> /dev/null)
     fi
 }
 
@@ -245,6 +280,7 @@ function zerk() {
         ssh-add ~/.ssh/adzerk.pem
     fi
     export ADZERK_ENV=" "
+    export KEVEL_JHA_READONLY_PROFILE=jha-devops-readonly
     export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/:~/adzerk/infrastructure/scripts
     
     # export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
@@ -260,7 +296,9 @@ function zerk() {
     export KEVEL_SUPPRESS_HOOK_WARNING='y'
 
     # If this doesn't work, you might need to do something like `jenv add /usr/local/Cellar/openjdk@17/17.0.7/` possibly followed by `hash -r`
-    jenv shell 17.0.7
+    jenv shell 17.0.8
+
+    source ~/adzerk/teammgmt/bin/.fns
 }
 
 alias geir='zerk && nvm use 14.17.3 && cd ~/adzerk/geir && background purple'
@@ -335,6 +373,7 @@ function echoc() {
 
 function prompt() {
     local IS_JHA
+    local TICKET
     local PROFILE=${AWS_PROFILE:=$AWS_DISPLAY_PROFILE}
     if [[ -n $PROFILE ]]
     then
@@ -354,7 +393,12 @@ function prompt() {
             echo -ne "\e[1;44m"
         fi
 
-	echo -ne "${PROFILE}${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME}\e[0m] "
+	if [[ -n $KEVEL_TICKET ]]
+	then
+	    TICKET="($KEVEL_TICKET)"
+	fi
+
+	echo -ne "${PROFILE}$TICKET:${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME}\e[0m] "
     fi
 
     gitstatus_prompt_update
@@ -386,4 +430,10 @@ merge	merge is in progress (could be some other action)
 +7	there are 7 staged changes
 !8	there are 8 unstaged changes
 ?9	there are 9 untracked files"
+}
+
+function aws_console () {
+    ( zerk 2
+      open `pacs -l`
+    )
 }
