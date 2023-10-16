@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+eval "$(cat ~/.config/trello:candera@wangdera.com.asc | gpg -d --quiet)"
+
+function print_usage() {
+  cat <<EOF
+$(basename "$0")
+   [ --attach FILE ]
+   [ --verbose | -v ]
+   [ --help | -h ]
+
+Given a video ID from the URL of a YouTube video, prints a list of all
+the videos on the channel, in upload order.
+
+EOF
+}
+
+while [[ "$1" != "" ]]; do
+  case "$1" in
+    "--attach")
+      shift
+      FILE_TO_ATTACH="$1"
+      ;;
+    "--verbose" | "-v")
+      set -x
+      ;;
+    "--help" | "-h")
+      print_usage
+      exit 0
+      ;;
+    *)
+      VIDEO_ID="$1"
+      ;;
+  esac
+  shift
+done
+
+if [[ -z $FILE_TO_ATTACH ]]
+then
+  CARD_NAME="Empty card"
+else
+  CARD_NAME=$(basename $FILE_TO_ATTACH)
+fi
+
+CREATE_CARD_RESPONSE=$(mktemp)
+
+if ! curl --request POST \
+  --url "https://api.trello.com/1/cards?idList=${TODO_FOR_CRAIG_TASKS}&key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}&pos=bottom&name=$CARD_NAME" \
+  --header 'Accept: application/json' > $CREATE_CARD_RESPONSE
+then
+  echo "Create card failed." > /dev/stderr
+  exit 1
+fi
+
+CARD_ID=$(cat $CREATE_CARD_RESPONSE | jq -r .id)
+
+if [[ -n $FILE_TO_ATTACH ]]
+then
+  echo "Uploading $FILE_TO_ATTACH" > /dev/stderr
+  curl --request POST \
+       --url "https://api.trello.com/1/cards/${CARD_ID}/attachments?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}" \
+       --header 'Accept: application/json' \
+       --form file=@$FILE_TO_ATTACH
+fi

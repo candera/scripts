@@ -281,7 +281,7 @@ function zerk() {
     fi
     export ADZERK_ENV=" "
     export KEVEL_JHA_READONLY_PROFILE=jha-devops-readonly
-    export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/:~/adzerk/infrastructure/scripts
+    export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/:~/adzerk/infrastructure/scripts:~/adzerk/api-proxy/itemdb/kq
     
     # export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
     # export AWS_SECRET_ACCESS_KEY=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_SECRET_ACCESS_KEY.asc)
@@ -296,7 +296,7 @@ function zerk() {
     export KEVEL_SUPPRESS_HOOK_WARNING='y'
 
     # If this doesn't work, you might need to do something like `jenv add /usr/local/Cellar/openjdk@17/17.0.7/` possibly followed by `hash -r`
-    jenv shell 17.0.8
+    jenv shell 17.0.8.1
 
     source ~/adzerk/teammgmt/bin/.fns
 }

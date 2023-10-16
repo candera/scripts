@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+eval "$(cat ~/.config/trello:candera@wangdera.com.asc | gpg -d --quiet)"
+
+function print_usage() {
+  cat <<EOF
+$(basename "$0")
+   BOARD_ID
+   [ --verbose | -v ]
+   [ --help | -h ]
+
+Given a video ID from the URL of a YouTube video, prints a list of all
+the videos on the channel, in upload order.
+
+EOF
+}
+
+while [[ "$1" != "" ]]; do
+  case "$1" in
+    "--verbose" | "-v")
+      set -x
+      ;;
+    "--help" | "-h")
+      print_usage
+      exit 0
+      ;;
+    *)
+      BOARD_ID="$1"
+      ;;
+  esac
+  shift
+done
+
+curl --request GET \
+  --url "https://api.trello.com/1/boards/${BOARD_ID}/lists?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}" \
+  --header 'Accept: application/json' | jq .

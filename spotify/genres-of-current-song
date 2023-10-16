@@ -148,6 +148,8 @@ do
   cat $ARTIST_INFO | jq -r '.genres[]' >> $GENRES
 done
 
+echo "Artist Info at $ARTIST_INFO"
+
 cat $GENRES | sort -u
 
 # DESTINATION_PLAYLIST_ID=$(cat $PLAYLISTS | jq -r ".items[] | select(.name == \"$DESTINATION_PLAYLIST\") | .id")
