@@ -1,0 +1,12 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "addin",
+  "id": "b0e5f2f2-82b5-4b0c-9fa3-activate-component-by-name",
+  "author": "Nolion",
+  "description": {
+    "": "Activate a component by typing part of its name."
+  },
+  "version": "1.0.0",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac"
+}

@@ -6,7 +6,7 @@ if [[ `uname` == "Darwin" ]]; then
 else
     READLINK_CMD=readlink
 fi
-PATH=${PATH}:/usr/local/sbin:/usr/local/bin
+PATH=${PATH}:/usr/local/sbin:/usr/local/bin:/opt/homebrew/opt/openjdk/bin
 HERE_DIR=$(dirname $($READLINK_CMD -e ~/.bashrc))
 
 export PATH=~/bin:$PATH
@@ -168,7 +168,23 @@ function prompt_callback () {
 	    fi
 	    echo $NOW > ~/.last-sso-check
 	fi
-        echo -e " ${LOGIN_STATUS}[${COLOR}(${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME})${ResetColor} ${DimBlueBg}$(echo ${ZERKENV_MODULES})${ResetColor}]"
+
+	if [[ -n $KEVEL_REPORTING_CLICKHOUSE_CLI_ENV ]]
+	then
+	    local CH_ENV="(ch:$KEVEL_REPORTING_CLICKHOUSE_CLI_ENV/$KEVEL_REPORTING_CLICKHOUSE_CLI_SERVICE)"
+	fi
+
+	if [[ -n $KEVEL_REPORTING_REDSHIFT_CLI_ENV ]]
+	then
+	    local RS_ENV="(rs:$KEVEL_REPORTING_REDSHIFT_CLI_ENV)"
+	fi
+
+	if [[ -n $KEVEL_REPORTING_DB_CLI_ENV ]]
+	then
+	    local RPTDB_ENV="(rptdb:$KEVEL_REPORTING_DB_CLI_ENV)"
+	fi
+
+        echo -e " ${LOGIN_STATUS}[${COLOR}(${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME})${ResetColor}${CH_ENV}${RS_ENV}${RPTDB_ENV} ${DimBlueBg}$(echo ${ZERKENV_MODULES})${ResetColor}]"
     fi
 }
 
@@ -215,6 +231,7 @@ function zsso() {
 	    PROFILES=$(mktemp)
 	    cat ~/.aws/config \
 		| grep profile \
+		| grep -v '^#' \
 		| sed -nr 's/\[profile (.*)\]/\1/p' \
 		| cat <(echo "jha-escalated") - \
 		| cat -n \
@@ -222,7 +239,7 @@ function zsso() {
 	    if [[ -z $IS_NUMBER ]]
 	    then
 		cat $PROFILES | column -t
-		read -p "> "
+		read -e -p "> "
 	    else
 		REPLY=$1
 	    fi
@@ -251,12 +268,12 @@ function zsso() {
     then
 	if [[ -n $KEVEL_TICKET ]]
 	then
-	    read -p "Escalation story [$KEVEL_TICKET]: "
+	    read -e -p "Escalation story [$KEVEL_TICKET]: "
 	else
-	    read -p "Escalation story: "
+	    read -e -p "Escalation story: "
 	fi
 	export KEVEL_TICKET=${REPLY:-$KEVEL_TICKET}
-	eval $(~/adzerk/infrastructure/scripts/pacs -t $KEVEL_TICKET -e)
+	eval $(pacs-aws -t $KEVEL_TICKET -e)
 	unset AWS_PROFILE
 	AWS_DISPLAY_PROFILE=jha-escalated
     fi
@@ -266,6 +283,11 @@ function zsso() {
     then
 	export ADZERK_SLACK_TOKEN=$(zecret ADZERK_SLACK_TOKEN 2> /dev/null)
     fi
+}
+
+function escalate() {
+    zsso 2
+    zsso 1
 }
 
 eval "$(jenv init -)"
@@ -281,24 +303,35 @@ function zerk() {
     fi
     export ADZERK_ENV=" "
     export KEVEL_JHA_READONLY_PROFILE=jha-devops-readonly
-    export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/:~/adzerk/infrastructure/scripts:~/adzerk/api-proxy/itemdb/kq
+    export PATH=$PATH:~/adzerk/cli-tools/scripts:~/adzerk/teammgmt/bin:~/adzerk/teammgmt/infrastructure/bin:~/adzerk/:~/adzerk/infrastructure/scripts:~/adzerk/api-proxy/itemdb/kq:~/adzerk/ssh-over-ssm:~/adzerk/team-reporting/tools/bin
     
     # export AWS_ACCESS_KEY_ID=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_ACCESS_KEY_ID.asc)
     # export AWS_SECRET_ACCESS_KEY=$(gpg -d --quiet ~/.adzerk/secrets/candera/AWS_SECRET_ACCESS_KEY.asc)
 
     export ADZERK_SLACK_TOKEN=$(zecret ADZERK_SLACK_TOKEN)
-    export SHORTCUT_API_TOKEN=$(gpg -d --quiet ~/.adzerk/secrets/candera/CLUBHOUSE_API_TOKEN.asc)
+    # gpg key expired on this and I couldn't figure out how to fix it.
+    # Need to add it back in at some point
+    # export SHORTCUT_API_TOKEN=$(gpg -d --quiet ~/.adzerk/secrets/candera/CLUBHOUSE_API_TOKEN.asc)
 
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
-    [ -s "/usr/local/opt/nvm/etc/bash_completion.d/nvm" ] && . "/usr/local/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+    # export NVM_DIR="$HOME/.nvm"
+    # [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
+    # [ -s "/usr/local/opt/nvm/etc/bash_completion.d/nvm" ] && . "/usr/local/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
     export KEVEL_SUPPRESS_HOOK_WARNING='y'
 
-    # If this doesn't work, you might need to do something like `jenv add /usr/local/Cellar/openjdk@17/17.0.7/` possibly followed by `hash -r`
-    jenv shell 17.0.8.1
+    export CDK_DEPLOY_SPEAK=y
+
+    # Only needs to be done once
+    # jenv enable-plugin export
+
+    # If this doesn't work, you might need to do something like `jenv add /opt/homebrew/Cellar/openjdk/22.0.2/` possibly followed by `hash -r`
+    # Might need to do `jenv remove xx` and `jenv remove xx.0` first; sometimes they disappear from the installation list
+    jenv shell 26
 
     source ~/adzerk/teammgmt/bin/.fns
+
+    # Pick up the exports from jenv
+    exec $SHELL
 }
 
 alias geir='zerk && nvm use 14.17.3 && cd ~/adzerk/geir && background purple'
@@ -383,6 +416,16 @@ function prompt() {
 	fi
     fi
 
+    # Merge history across all sessions
+    history -a
+    history -c
+    history -r
+
+    # Turns out this is slow enough to notice
+    # REGION=$(aws configure get region)
+    REGION=$( cat ~/.aws/config | grep "\[profile $AWS_PROFILE\]" -A 20 | grep '^region' | cut -d = -f 2 | head -1 | gtr -d '[:space:]')
+    DISPLAY_REGION="@$REGION"
+
     if [[ -n "${ADZERK_ENV}" || -n "${PROFILE}" ]]
     then
 	echo -ne "["
@@ -398,14 +441,36 @@ function prompt() {
 	    TICKET="($KEVEL_TICKET)"
 	fi
 
-	echo -ne "${PROFILE}$TICKET:${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME}\e[0m] "
+	if [[ -n $KEVEL_REPORTING_CLICKHOUSE_CLI_ENV ]]
+	then
+	    local CH_ENV="(ch:$KEVEL_REPORTING_CLICKHOUSE_CLI_ENV/$KEVEL_REPORTING_CLICKHOUSE_CLI_WAREHOUSE/$KEVEL_REPORTING_CLICKHOUSE_CLI_SERVICE))"
+	fi
+
+	if [[ -n $KEVEL_REPORTING_REDSHIFT_CLI_ENV ]]
+	then
+	    local RS_ENV="(rs:$KEVEL_REPORTING_REDSHIFT_CLI_ENV)"
+	fi
+
+	if [[ -n $KEVEL_REPORTING_DB_CLI_ENV ]]
+	then
+	    local RPTDB_ENV="(rptdb:${KEVEL_REPORTING_DB_USER}@${KEVEL_REPORTING_DB_CLI_ENV})"
+	fi
+
+	# For some weird reason, using PROFILE unmodified does
+	# something weird to the prompt. I think it has escape
+	# characters in it somehow. echoing it first seems to resolve
+	# the problem.
+	DISPLAY_PROFILE=$(echo $PROFILE)
+	echo -ne "${DISPLAY_PROFILE}${DISPLAY_REGION}$TICKET:${ADZERK_MSQL_USER}@${ADZERK_MSQL_HOSTNAME}${CH_ENV}${RS_ENV}${RPTDB_ENV}\e[0m] "
     fi
 
     gitstatus_prompt_update
     
     if [[ -n $GITSTATUS_PROMPT ]]
     then
-	echo -e "{${GITSTATUS_PROMPT:+$GITSTATUS_PROMPT}}"
+	echo -e "{${GITSTATUS_PROMPT:+$GITSTATUS_PROMPT}}" | tr -d '\001\002'
+    else
+	echo
     fi
 }
 
@@ -437,3 +502,31 @@ function aws_console () {
       open `pacs -l`
     )
 }
+
+# Created by `pipx` on 2024-01-12 16:03:06
+export PATH="$PATH:~/.local/bin"
+
+# For pdflatex, installed by `brew install basictex`
+export PATH="$PATH:/Library/TeX/texbin/"
+
+export CMAKE_ROOT=$(dirname $(greadlink -e $(which cmake)))/..
+
+# One-at-a-time completion for filenames, etc. rather than listing them
+bind '"\t": menu-complete'
+bind '"\e[Z": menu-complete-backward'
+
+# Cargo (Rust) binaries
+export PATH="$PATH:~/.cargo/bin"
+
+# Bun. Yet another package manager. This one is npm reinvented
+export PATH="$PATH:~/.bun/bin"
+
+
+# Added by Antigravity CLI installer
+export PATH="/Users/candera/.local/bin:$PATH"
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/candera/.lmstudio/bin"
+# End of LM Studio CLI section
+
+export PATH="$PATH:/Users/candera/go/bin"

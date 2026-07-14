@@ -6,6 +6,8 @@ SPOTIFY_CLIENT_ID=342b6fa5fc674056b913082df8fcdae5
 SPOTIFY_AUTH_SCOPES="user-read-playback-state"
 CALLBACK_PORT=16648
 
+eval $(gpg -d ~/lastfm-api-key.asc) || (echo "No Last FM API key found" && exit 1)
+
 function print_usage() {
   cat <<EOF
 $(basename $0)
@@ -30,7 +32,17 @@ done
 echo "Logging in"
 
 SPOTIFY_RESPONSE_ID=$(uuidgen)
-SPOTIFY_AUTH_TOKEN_PATH=$(mktemp -d)/token
+SPOTIFY_AUTH_CODE_PATH=$(mktemp -d)/code
+
+# Spotify removed the implicit grant (response_type=token), so we use
+# the authorization code flow with PKCE, which doesn't require a
+# client secret.
+CODE_VERIFIER=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 64)
+CODE_CHALLENGE=$(printf %s "$CODE_VERIFIER" \
+  | openssl dgst -sha256 -binary \
+  | openssl base64 -A \
+  | tr '+/' '-_' \
+  | tr -d '=')
 
 CALLBACK_FILE=$(mktemp)
 
@@ -40,20 +52,13 @@ CALLBACK_FILE=$(mktemp)
 (
   # set -xv
   CALLBACK_RECORD=$(mktemp)
-  while [[ ! -f $SPOTIFY_AUTH_TOKEN_PATH ]]
+  while [[ ! -f $SPOTIFY_AUTH_CODE_PATH ]]
   do
     if ! nc -l $CALLBACK_PORT > $CALLBACK_FILE <<EOF
 HTTP/1.1 200 OK
 Content-Type: text/html
 
 <html>
-  <head>
-    <script>
-      if (window.location.hash.length > 0) {
-        window.location.replace("http://localhost:${CALLBACK_PORT}/callback?" + window.location.hash.substring(1));
-      }
-    </script>
-  </head>
   <body>
     <h1>Login Complete!</h1>
     You can close this window and go back to the command line now.
@@ -68,9 +73,13 @@ EOF
     cat $CALLBACK_FILE >> $CALLBACK_RECORD
     echo >> $CALLBACK_RECORD
 
-    if cat $CALLBACK_FILE | head -1 | grep "GET /callback?"
+    if cat $CALLBACK_FILE | head -1 | grep -q "GET /callback?"
     then
-      cat $CALLBACK_FILE | head -1 | grep -o 'access_token=[^&]*' | cut -f 2 -d = > $SPOTIFY_AUTH_TOKEN_PATH
+      # Write the code to a scratch file and mv it into place: the
+      # parent polls for the file's existence, so it must never be
+      # able to observe it half-written.
+      cat $CALLBACK_FILE | head -1 | grep -o 'code=[^& ]*' | head -1 | cut -f 2 -d = > ${SPOTIFY_AUTH_CODE_PATH}.partial
+      mv ${SPOTIFY_AUTH_CODE_PATH}.partial $SPOTIFY_AUTH_CODE_PATH
     fi
   done
   ) & > /dev/null
@@ -82,31 +91,61 @@ sleep 1
 
 open \
   --background \
-     "https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=http%3A%2F%2Flocalhost:${CALLBACK_PORT}%2fcallback&scope=${SPOTIFY_AUTH_SCOPES}&state=${SPOTIFY_RESPONSE_ID}"
+     "https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=code&code_challenge_method=S256&code_challenge=${CODE_CHALLENGE}&redirect_uri=http%3A%2F%2F127.0.0.1:${CALLBACK_PORT}%2fcallback&scope=${SPOTIFY_AUTH_SCOPES}&state=${SPOTIFY_RESPONSE_ID}"
 
 echo "Waiting for authentication"
-while [[ ! -f $SPOTIFY_AUTH_TOKEN_PATH ]]
+while [[ ! -f $SPOTIFY_AUTH_CODE_PATH ]]
 do
   echo -n "."
   sleep 1
 done
 echo
 
-SPOTIFY_AUTH_TOKEN=$(cat $SPOTIFY_AUTH_TOKEN_PATH)
+SPOTIFY_AUTH_CODE=$(cat $SPOTIFY_AUTH_CODE_PATH)
 
 # cat $CALLBACK_FILE
 
 kill %1
 
-if [[ -z $SPOTIFY_AUTH_TOKEN ]]
+if [[ -z $SPOTIFY_AUTH_CODE ]]
 then
-  echo "Unable to log in."
+  echo "Unable to log in. Callback request was:" >&2
+  head -1 $CALLBACK_FILE >&2
   exit 1
-else
-  echo "Received auth token $SPOTIFY_AUTH_TOKEN"
 fi
 
-echo "Getting current track."
+echo "Exchanging authorization code for access token" >&2
+
+TOKEN_RESPONSE=$(mktemp)
+if ! curl --fail \
+     --silent \
+     -X "POST" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     --data-urlencode "client_id=${SPOTIFY_CLIENT_ID}" \
+     --data-urlencode "grant_type=authorization_code" \
+     --data-urlencode "code=${SPOTIFY_AUTH_CODE}" \
+     --data-urlencode "redirect_uri=http://127.0.0.1:${CALLBACK_PORT}/callback" \
+     --data-urlencode "code_verifier=${CODE_VERIFIER}" \
+     "https://accounts.spotify.com/api/token" \
+     > $TOKEN_RESPONSE
+then
+  echo "Failed to exchange authorization code for token" >&2
+  cat $TOKEN_RESPONSE >&2
+  exit 1
+fi
+
+SPOTIFY_AUTH_TOKEN=$(cat $TOKEN_RESPONSE | jq -r '.access_token // empty')
+
+if [[ -z $SPOTIFY_AUTH_TOKEN ]]
+then
+  echo "Unable to log in." >&2
+  cat $TOKEN_RESPONSE >&2
+  exit 1
+else
+  echo "Received auth token $SPOTIFY_AUTH_TOKEN" >&2
+fi
+
+echo "Getting current track." >&2
 
 TRACK=$(mktemp)
 if ! curl --fail \
@@ -118,38 +157,134 @@ if ! curl --fail \
      "https://api.spotify.com/v1/me/player" \
      > $TRACK
 then
-  echo "Failed to retrieve current track"
+  echo "Failed to retrieve current track" >&2
   cat $TRACK
   exit 1
 fi
 
-ARTIST_IDS=$(mktemp)
+echo "Track info at $TRACK" >&2
 
-cat $TRACK | jq -r .item.artists[].id > $ARTIST_IDS
+TRACK_NAME=$(cat $TRACK | jq -r .item.name)
+PRIMARY_ARTIST=$(cat $TRACK | jq -r '.item.artists[0].name')
+
+if [[ -z $TRACK_NAME || $TRACK_NAME == "null" ]]
+then
+  echo "Nothing seems to be playing." >&2
+  exit 1
+fi
+
+echo "Current track: $PRIMARY_ARTIST - $TRACK_NAME" >&2
+
+ARTIST_NAMES=$(mktemp)
+cat $TRACK | jq -r '.item.artists[].name' > $ARTIST_NAMES
 
 GENRES=$(mktemp)
-ARTIST_INFO=$(mktemp)
 
-for ARTIST_ID in $(cat $ARTIST_IDS)
-do
-  if ! curl --silent \
+# Genre sources, most specific first. Last.fm has per-track tags;
+# MusicBrainz and Spotify only tag artists, and Spotify's genre data
+# is frequently empty, so it goes last.
+
+if [[ -n $LASTFM_API_KEY ]]
+then
+  echo "Looking up track tags on Last.fm" >&2
+  LASTFM_TAGS=$(mktemp)
+  if curl --silent \
        --fail \
-       -X "GET" \
-       -H "Accept: application/json" \
-       -H "Content-Type: application/json" \
-       -H "Authorization: Bearer $SPOTIFY_AUTH_TOKEN" \
-       "https://api.spotify.com/v1/artists/${ARTIST_ID}" \
-       > $ARTIST_INFO
+       --get \
+       --data-urlencode "method=track.gettoptags" \
+       --data-urlencode "artist=${PRIMARY_ARTIST}" \
+       --data-urlencode "track=${TRACK_NAME}" \
+       --data-urlencode "api_key=${LASTFM_API_KEY}" \
+       --data-urlencode "format=json" \
+       "https://ws.audioscrobbler.com/2.0/" \
+       > $LASTFM_TAGS
   then
-    echo "Failed to retrieve list of top artists"
-    exit 1
+    # Tag counts are normalized 0-100; low-count tags are mostly
+    # noise ("seen live", years, etc.)
+    cat $LASTFM_TAGS \
+      | jq -r '.toptags.tag[]? | select(.count >= 10) | .name' \
+      | tr '[:upper:]' '[:lower:]' >> $GENRES
+  else
+    echo "Last.fm lookup failed; falling back" >&2
   fi
+else
+  echo "LASTFM_API_KEY not set; skipping Last.fm track tags" >&2
+fi
 
-  cat $ARTIST_INFO | jq -r '.genres[]' >> $GENRES
-done
+if [[ ! -s $GENRES ]]
+then
+  echo "Looking up artist genres on MusicBrainz" >&2
+  # MusicBrainz requires a User-Agent identifying the caller
+  MUSICBRAINZ_UA="genres-of-current-song/1.0"
+  MUSICBRAINZ_ARTIST=$(mktemp)
+  FIRST_LOOKUP=1
+  while read -r ARTIST_NAME
+  do
+    # MusicBrainz asks for at most one request per second
+    [[ $FIRST_LOOKUP == 1 ]] || sleep 1
+    FIRST_LOOKUP=0
 
-echo "Artist Info at $ARTIST_INFO"
+    MUSICBRAINZ_ID=$(curl --silent \
+                          --fail \
+                          --get \
+                          -H "User-Agent: $MUSICBRAINZ_UA" \
+                          --data-urlencode "query=artist:\"${ARTIST_NAME}\"" \
+                          --data-urlencode "fmt=json" \
+                          --data-urlencode "limit=1" \
+                          "https://musicbrainz.org/ws/2/artist" \
+                       | jq -r '.artists[0].id // empty')
 
+    if [[ -n $MUSICBRAINZ_ID ]]
+    then
+      sleep 1
+      if curl --silent \
+           --fail \
+           -H "User-Agent: $MUSICBRAINZ_UA" \
+           "https://musicbrainz.org/ws/2/artist/${MUSICBRAINZ_ID}?inc=genres&fmt=json" \
+           > $MUSICBRAINZ_ARTIST
+      then
+        cat $MUSICBRAINZ_ARTIST | jq -r '.genres[].name' >> $GENRES
+      fi
+    fi
+  done < $ARTIST_NAMES
+fi
+
+if [[ ! -s $GENRES ]]
+then
+  echo "Falling back to Spotify artist genres" >&2
+
+  ARTIST_IDS=$(mktemp)
+
+  cat $TRACK | jq -r .item.artists[].id > $ARTIST_IDS
+
+  ARTIST_INFO=$(mktemp)
+
+  for ARTIST_ID in $(cat $ARTIST_IDS)
+  do
+    if ! curl --silent \
+         --fail \
+         -X "GET" \
+         -H "Accept: application/json" \
+         -H "Content-Type: application/json" \
+         -H "Authorization: Bearer $SPOTIFY_AUTH_TOKEN" \
+         "https://api.spotify.com/v1/artists/${ARTIST_ID}" \
+         > $ARTIST_INFO
+    then
+      echo "Failed to retrieve artist info" >&2
+      exit 1
+    fi
+
+    cat $ARTIST_INFO | jq -r '.genres[]' >> $GENRES
+  done
+fi
+
+if [[ ! -s $GENRES ]]
+then
+  echo "No genres found in any source." >&2
+  exit 1
+fi
+
+echo "Genres:" >&2
 cat $GENRES | sort -u
 
 # DESTINATION_PLAYLIST_ID=$(cat $PLAYLISTS | jq -r ".items[] | select(.name == \"$DESTINATION_PLAYLIST\") | .id")
