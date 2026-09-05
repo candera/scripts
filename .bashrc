@@ -80,6 +80,12 @@ alias emacs='TERM=xterm-256color emacs -nw'
 alias Emacs='open -a /Applications/Emacs.app'
 alias tmux='TERM=xterm-256color tmux'
 
+alias emacs-stock='"$(brew --prefix emacs)/bin/emacs"'
+alias emacs-webkit='"$(brew --prefix emacs-plus)/bin/emacs"'
+
+alias emacs-stock-gui='open -na "$(brew --prefix emacs)/Emacs.app"'
+alias emacs-webkit-gui='open -na "$(brew --prefix emacs-plus)/Emacs.app"'
+
 alias python=python3
 
 if [[ -f ~/local.bashrc ]]; then
@@ -499,7 +505,7 @@ merge	merge is in progress (could be some other action)
 
 function aws_console () {
     ( zerk 2
-      open `pacs -l`
+      open `pacs-aws -l`
     )
 }
 
@@ -530,3 +536,5 @@ export PATH="$PATH:/Users/candera/.lmstudio/bin"
 # End of LM Studio CLI section
 
 export PATH="$PATH:/Users/candera/go/bin"
+
+export PATH="$PATH:/Users/candera/.emacs.d/elpa/claude-code/bin/"
